@@ -46,7 +46,7 @@ def serve(transport: str) -> None:
     _serve()
 
 
-@cli.command()
+@cli.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.option(
     "--proxy",
     "-p",
@@ -69,9 +69,15 @@ def serve(transport: str) -> None:
 @click.option("--port", type=int, help="Server port (overrides HTTP_PORT)")
 @click.option("--path", help="Server path for HTTP transport (overrides HTTP_PATH)")
 @click.option(
-    "--trace-header",
+    "--header",
+    "-H",
     multiple=True,
-    help="Additional tracing headers (format: key=value)",
+    help="Additional HTTP headers to inject into all requests (format: key=value)",
+)
+@click.option(
+    "--cookies-file",
+    "-c",
+    help="JSON file containing default cookies to inject into all requests",
 )
 def serve_http(
     proxy: str | None,
@@ -81,18 +87,21 @@ def serve_http(
     host: str | None,
     port: int | None,
     path: str | None,
-    trace_header: tuple[str, ...],
+    header: tuple[str, ...],
+    cookies_file: str | None,
 ) -> None:
     """Start HTTP operations MCP server with configuration.
 
-    This server provides HTTP request tools with automatic proxy routing
-    and tracing headers. Perfect for red team operations where you need
-    to route all traffic through tools like Burp Suite.
+    This server provides HTTP request tools with automatic proxy routing,
+    custom header injection, and cookie persistence. Perfect for red team
+    operations where you need to route all traffic through tools like Burp Suite.
 
     Examples:
         code_mcp serve-http --proxy http://127.0.0.1:8080
         code_mcp serve-http --proxy http://127.0.0.1:8080 --no-verify-ssl
-        code_mcp serve-http --trace-header "X-Team=RedTeam" --trace-header "X-Engagement=Test"
+        code_mcp serve-http -H "X-Team=RedTeam" -H "Authorization=Bearer token123"
+        code_mcp serve-http --cookies-file /path/to/session_cookies.json
+        code_mcp serve-http --proxy http://127.0.0.1:8080 -H "X-Custom=Value" -c /path/to/cookies.json
     """
 
     def _serve_http() -> None:
@@ -115,15 +124,15 @@ def serve_http(
         actual_port = port if port is not None else http_settings.port
         actual_path = path if path is not None else http_settings.path
 
-        # Parse additional tracing headers
+        # Parse additional headers
         additional_headers = {}
-        for header in trace_header:
-            if "=" in header:
-                key, value = header.split("=", 1)
+        for header_item in header:
+            if "=" in header_item:
+                key, value = header_item.split("=", 1)
                 additional_headers[key.strip()] = value.strip()
             else:
                 click.echo(
-                    f"Warning: Ignoring invalid header format '{header}'. Use key=value format."
+                    f"Warning: Ignoring invalid header format '{header_item}'. Use key=value format."
                 )
 
         # Create HTTP configuration with injected settings
@@ -138,6 +147,7 @@ def serve_http(
             timeout=actual_timeout,
             verify_ssl=actual_verify_ssl,
             tracing_headers=base_headers,
+            default_cookies_file=cookies_file,
         )
 
         # Create HTTP tool provider with injected config
@@ -160,6 +170,8 @@ def serve_http(
             click.echo(f"   Proxy: {actual_proxy}")
         if not actual_verify_ssl:
             click.echo("   SSL Verification: Disabled")
+        if cookies_file:
+            click.echo(f"   Cookie Injection: {cookies_file}")
 
         if actual_transport == "stdio":
             click.echo(

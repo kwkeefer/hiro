@@ -76,13 +76,20 @@ class HttpRequestTool:
             if headers:
                 merged_headers.update(headers)
 
+            # Merge cookies: default cookies + user cookies (user overrides default)
+            merged_cookies: dict[str, str] = {}
+            if self._config.default_cookies:
+                merged_cookies.update(self._config.default_cookies)
+            if cookies:
+                merged_cookies.update(cookies)
+
             # Prepare request configuration
             request_config: dict[str, Any] = {
                 "method": method.upper(),
                 "url": url,
                 "headers": merged_headers,
                 "params": params or {},
-                "cookies": cookies or {},
+                "cookies": merged_cookies,
             }
 
             # Add authentication if provided
@@ -129,6 +136,7 @@ class HttpRequestTool:
                     "method": method.upper(),
                     "headers_sent": merged_headers,  # Show what was actually sent
                     "headers_user": headers or {},  # Show what user requested
+                    "cookies": merged_cookies,  # Show cookies that were sent
                     "params": params or {},
                     "data": data,
                     "proxy_used": self._config.proxy_url,  # Show if proxy was used
