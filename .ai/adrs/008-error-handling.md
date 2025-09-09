@@ -1,7 +1,7 @@
 # ADR-008: Error Handling Strategy
 
-**Status**: Proposed  
-**Date**: 2025-09-08  
+**Status**: Proposed
+**Date**: 2025-09-08
 
 ## Context
 Need consistent error handling across the application.

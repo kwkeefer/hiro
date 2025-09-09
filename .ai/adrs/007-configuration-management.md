@@ -1,7 +1,7 @@
 # ADR-007: Configuration Management
 
-**Status**: Proposed  
-**Date**: 2025-09-08  
+**Status**: Proposed
+**Date**: 2025-09-08
 
 ## Context
 Need a way to manage configuration across different environments.

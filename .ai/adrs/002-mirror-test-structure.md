@@ -1,7 +1,7 @@
 # ADR-002: Mirror Test Structure to Source
 
-**Status**: Accepted  
-**Date**: 2025-09-08  
+**Status**: Accepted
+**Date**: 2025-09-08
 
 ## Context
 Tests need to be organized in a way that makes it easy to find the tests for any given module.

@@ -13,7 +13,7 @@
 ```
 src/code_mcp/
   core/   → Business logic
-  api/    → External interfaces  
+  api/    → External interfaces
   db/     → Database code
   utils/  → Helpers
 tests/    → Mirror src/ structure

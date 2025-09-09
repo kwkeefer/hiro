@@ -1,7 +1,7 @@
 # ADR-004: Makefile as Primary Developer Interface
 
-**Status**: Accepted  
-**Date**: 2025-09-08  
+**Status**: Accepted
+**Date**: 2025-09-08
 
 ## Context
 Developers need a consistent interface for common tasks regardless of their familiarity with Python tooling.

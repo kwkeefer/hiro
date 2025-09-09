@@ -1,7 +1,7 @@
 # ADR-001: Use src Layout for Python Package
 
-**Status**: Accepted  
-**Date**: 2025-09-08  
+**Status**: Accepted
+**Date**: 2025-09-08
 
 ## Context
 Need to organize Python package structure in a way that prevents accidental imports of development code and ensures proper testing isolation.

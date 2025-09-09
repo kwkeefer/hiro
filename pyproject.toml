@@ -21,6 +21,9 @@ classifiers = [
 ]
 dependencies = [
     "click>=8.1.0",
+    "fastmcp>=2.12.2",
+    "httpx>=0.28.1",
+    "pre-commit>=4.3.0",
 ]
 
 [project.optional-dependencies]
@@ -116,3 +119,9 @@ namespace_packages = true
 show_error_codes = true
 show_column_numbers = true
 pretty = true
+
+[dependency-groups]
+dev = [
+    "mypy>=1.17.1",
+    "ruff>=0.12.12",
+]

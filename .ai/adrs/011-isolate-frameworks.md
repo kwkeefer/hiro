@@ -1,7 +1,7 @@
 # ADR-011: Isolate Framework Dependencies
 
-**Status**: Accepted  
-**Date**: 2025-09-08  
+**Status**: Accepted
+**Date**: 2025-09-08
 **Reference**: https://github.com/zakirullin/cognitive-load
 
 ## Context

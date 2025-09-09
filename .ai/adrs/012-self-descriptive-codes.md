@@ -1,7 +1,7 @@
 # ADR-012: Use Self-Descriptive Status Codes
 
-**Status**: Accepted  
-**Date**: 2025-09-08  
+**Status**: Accepted
+**Date**: 2025-09-08
 **Reference**: https://github.com/zakirullin/cognitive-load
 
 ## Context

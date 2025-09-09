@@ -1,6 +1,6 @@
 # ADR-005: Click for CLI Framework
 
-**Status**: Accepted  
+**Status**: Accepted
 **Date**: 2025-09-08
 ## Context
 Project requires a command-line interface for user interaction.

@@ -188,7 +188,7 @@ code_mcp --help
 
 If you need to:
 - Understand a design decision → Check `.ai/architecture-decisions.md` index and relevant ADRs
-- Know the code style → Check `.ai/coding-standards.md`  
+- Know the code style → Check `.ai/coding-standards.md`
 - Find project info → Check `.ai/project-context.md`
 - Run a command → Try `make help`
 

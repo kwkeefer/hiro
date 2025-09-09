@@ -1,7 +1,7 @@
 # ADR-XXX: [Decision Title]
 
-**Status**: [Proposed|Accepted|Deprecated|Superseded]  
-**Date**: YYYY-MM-DD  
+**Status**: [Proposed|Accepted|Deprecated|Superseded]
+**Date**: YYYY-MM-DD
 
 ## Context
 [Describe the issue motivating this decision]

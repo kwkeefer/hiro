@@ -1,7 +1,7 @@
 # ADR-010: Prefer Deep Modules
 
-**Status**: Accepted  
-**Date**: 2025-09-08  
+**Status**: Accepted
+**Date**: 2025-09-08
 **Reference**: https://github.com/zakirullin/cognitive-load
 
 ## Context
@@ -14,7 +14,7 @@ Create "deep" modules with simple public interfaces and substantial private impl
 ```python
 # ❌ Avoid: Many shallow modules
 # user_validator.py (30 lines)
-# user_serializer.py (40 lines)  
+# user_serializer.py (40 lines)
 # user_repository.py (50 lines)
 # user_service.py (20 lines just orchestrating)
 
@@ -24,7 +24,7 @@ class UserService:
     """Simple public interface"""
     def create_user(self, data: UserData) -> User: ...
     def get_user(self, id: str) -> User: ...
-    
+
     # Complex private implementation
     def _validate(self, data): ...
     def _serialize(self, user): ...

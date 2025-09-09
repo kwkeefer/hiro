@@ -1,7 +1,7 @@
 # ADR-013: Limit Nested Control Flow
 
-**Status**: Accepted  
-**Date**: 2025-09-08  
+**Status**: Accepted
+**Date**: 2025-09-08
 **Reference**: https://github.com/zakirullin/cognitive-load
 
 ## Context
@@ -31,7 +31,7 @@ def process_order(order, user, payment):
         raise PermissionError("User not verified")
     if not payment.is_valid:
         raise PaymentError("Invalid payment")
-    
+
     return process()
 
 # ✅ Also good: Extract complex conditions

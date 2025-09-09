@@ -1,7 +1,7 @@
 # ADR-009: Prefer Composition Over Inheritance
 
-**Status**: Accepted  
-**Date**: 2025-09-08  
+**Status**: Accepted
+**Date**: 2025-09-08
 
 ## Context
 Need to design flexible, maintainable code that avoids the pitfalls of deep inheritance hierarchies and promotes loose coupling between components.

@@ -42,7 +42,7 @@
 class EmailService:
     def __init__(self, smtp_client: SMTPClient):
         self._client = smtp_client
-    
+
     def send(self, message: Message) -> None:
         self._client.send(message.to_dict())
 
@@ -55,7 +55,7 @@ class MessageSender(Protocol):
 class EmailService:  # No inheritance needed
     def __init__(self, smtp_client: SMTPClient):
         self._client = smtp_client
-    
+
     def send(self, message: Message) -> None:
         self._client.send(message.to_dict())
 ```

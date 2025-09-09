@@ -1,7 +1,7 @@
 # ADR-006: Module Organization
 
-**Status**: Proposed  
-**Date**: 2025-09-08  
+**Status**: Proposed
+**Date**: 2025-09-08
 
 ## Context
 Need clear boundaries between different aspects of the application.

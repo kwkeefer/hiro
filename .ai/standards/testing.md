@@ -18,10 +18,10 @@ def test_feature_behavior(self):
     # Arrange - Set up test data
     user = User(name="test")
     service = Service()
-    
+
     # Act - Execute the behavior
     result = service.process(user)
-    
+
     # Assert - Verify outcomes
     assert result.status == "success"
     assert user.processed is True
@@ -35,23 +35,23 @@ Keep each section distinct. Use blank lines to separate if needed.
 ```python
 class TestFeatureName:
     """Group related tests."""
-    
+
     @pytest.mark.unit
     def test_happy_path(self):
         # Arrange
         input_data = {"key": "value"}
-        
+
         # Act
         result = feature(input_data)
-        
+
         # Assert
         assert result == expected
-    
+
     @pytest.mark.unit
     def test_edge_case(self):
         # Arrange
         invalid_input = ""
-        
+
         # Act & Assert
         with pytest.raises(ValueError):
             feature(invalid_input)
