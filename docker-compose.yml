@@ -1,0 +1,25 @@
+
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: code_mcp:latest
+    container_name: code_mcp
+    restart: unless-stopped
+    environment:
+      - ENV=production
+    volumes:
+      - ./config:/app/config:ro
+      - ./data:/app/data
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  data:
