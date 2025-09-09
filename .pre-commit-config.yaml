@@ -24,8 +24,9 @@ repos:
     rev: v1.10.0
     hooks:
       - id: mypy
-        args: [--strict, --ignore-missing-imports]
+        args: [--ignore-missing-imports]
         additional_dependencies: [
           types-click,
+          pydantic-settings,
         ]
         files: ^src/

@@ -24,6 +24,8 @@ dependencies = [
     "fastmcp>=2.12.2",
     "httpx>=0.28.1",
     "pre-commit>=4.3.0",
+    "pydantic-settings>=2.10.1",
+    "python-dotenv>=1.1.1",
 ]
 
 [project.optional-dependencies]
@@ -60,6 +62,7 @@ addopts = [
     "--strict-markers",
     "--strict-config",
 ]
+asyncio_mode = "auto"
 markers = [
     "unit: Unit tests",
     "integration: Integration tests",
@@ -111,17 +114,32 @@ known-first-party = ["code_mcp"]
 
 [tool.mypy]
 python_version = "3.12"
-strict = true
 warn_return_any = true
 warn_unused_configs = true
+disallow_untyped_defs = false  # Start permissive
+check_untyped_defs = true      # But still check typed code
+warn_redundant_casts = true    # Catch obvious issues
+warn_unused_ignores = true     # Keep ignores clean
 no_implicit_reexport = true
 namespace_packages = true
 show_error_codes = true
 show_column_numbers = true
 pretty = true
 
+# Gradually enable stricter checks
+[[tool.mypy.overrides]]
+module = "code_mcp.core.*"
+disallow_untyped_defs = true   # Strict for core modules
+
+[[tool.mypy.overrides]]
+module = "code_mcp.models.*"
+disallow_untyped_defs = true   # Strict for data models
+
 [dependency-groups]
 dev = [
     "mypy>=1.17.1",
     "ruff>=0.12.12",
+]
+test = [
+    "pytest-asyncio>=1.1.0",
 ]

@@ -27,12 +27,12 @@ Getting started with MCP stuff
 code_mcp/
 ├── src/code_mcp/   # Main package source code
 │   ├── core/                              # Core business logic
+│   │   └── config/                        # Configuration management
 │   ├── api/                               # API interfaces
 │   ├── db/                                # Database modules
 │   └── utils/                             # Utility functions
 ├── tests/                                 # Test suite (mirrors src structure)
 ├── docs/                                  # Documentation
-├── config/                                # Configuration files
 └── scripts/                               # Utility scripts
 ```
 
@@ -68,6 +68,30 @@ code_mcp/
 - `.ai/` - AI assistant instructions and context
 - `.claude/` - Claude Code agents and configuration
 - `tests/conftest.py` - Shared test fixtures
+
+## Architecture Notes
+
+### FastMCP Integration Philosophy - Hybrid Approach
+We use a **hybrid approach** that balances architectural purity with pragmatic simplicity:
+
+#### What We Keep (Protocol Organization)
+- **Provider classes** - `HttpToolProvider` organizes HTTP tools with dependency injection
+- **Business logic isolation** - Tool implementations (`HttpRequestTool.execute()`) are pure business logic
+- **Testable structure** - Can unit test tools without FastMCP dependencies
+- **Clear module boundaries** - HTTP tools live in `servers/http/`, server adapter in `api/mcp/`
+
+#### What We Simplified (Direct Registration)
+- **No generic wrappers** - Register tool functions directly with FastMCP instead of through protocol methods
+- **FastMCP-aware registration** - Server adapter knows about specific tool types (HTTP, future: DB, etc.)
+- **Pragmatic coupling** - Accept that changing MCP implementations means updating the adapter
+
+#### Why This Works
+- **FastMCP is lightweight** - Not a heavy framework requiring full abstraction
+- **Registration is simple** - One line per tool, not worth complex generic wrappers
+- **Business logic stays clean** - Tools don't know about FastMCP, only providers do
+- **Architecture scales** - Easy to add new tool types with direct registration
+
+**Key principle**: Use protocols for **organization and testing**, direct registration for **simplicity and compatibility**.
 
 ## Notes for AI Assistants
 - Always use the `src/` layout when adding new modules

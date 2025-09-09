@@ -1,9 +1,14 @@
 """Command-line interface for code-mcp."""
 
+import sys
+
+sys.path.insert(0, ".")
+
 import click
 
 from code_mcp import __version__
 from code_mcp.api.mcp.server import FastMcpServerAdapter
+from code_mcp.core.config.settings import get_settings
 from code_mcp.servers.http.config import HttpConfig
 from code_mcp.servers.http.providers import HttpToolProvider
 
@@ -35,6 +40,7 @@ def serve(transport: str) -> None:
         # server.add_resource_provider(your_resource_provider)
 
         click.echo(f"Starting MCP server with {transport} transport...")
+        click.echo("\nTo connect Claude Desktop: claude mcp add code_mcp serve\n")
         server.start(transport=transport)
 
     _serve()
@@ -44,13 +50,24 @@ def serve(transport: str) -> None:
 @click.option(
     "--proxy",
     "-p",
-    help="Proxy URL for all HTTP requests (e.g., http://127.0.0.1:8080)",
+    help="Proxy URL for all HTTP requests (overrides HTTP_PROXY_URL)",
 )
-@click.option("--timeout", "-t", default=30, help="Request timeout in seconds")
 @click.option(
-    "--verify-ssl/--no-verify-ssl", default=True, help="Verify SSL certificates"
+    "--timeout",
+    "-t",
+    help="Request timeout in seconds (overrides HTTP_REQUEST_TIMEOUT)",
 )
-@click.option("--transport", default="stdio", help="Transport type (stdio, sse)")
+@click.option(
+    "--verify-ssl/--no-verify-ssl",
+    default=None,
+    help="Verify SSL certificates (overrides HTTP_VERIFY_SSL)",
+)
+@click.option(
+    "--transport", help="Transport type: http, stdio, sse (overrides HTTP_TRANSPORT)"
+)
+@click.option("--host", help="Server host (overrides HTTP_HOST)")
+@click.option("--port", type=int, help="Server port (overrides HTTP_PORT)")
+@click.option("--path", help="Server path for HTTP transport (overrides HTTP_PATH)")
 @click.option(
     "--trace-header",
     multiple=True,
@@ -58,9 +75,12 @@ def serve(transport: str) -> None:
 )
 def serve_http(
     proxy: str | None,
-    timeout: int,
-    verify_ssl: bool,
-    transport: str,
+    timeout: int | None,
+    verify_ssl: bool | None,
+    transport: str | None,
+    host: str | None,
+    port: int | None,
+    path: str | None,
     trace_header: tuple[str, ...],
 ) -> None:
     """Start HTTP operations MCP server with configuration.
@@ -76,6 +96,25 @@ def serve_http(
     """
 
     def _serve_http() -> None:
+        # Load settings from config
+        settings = get_settings()
+        http_settings = settings.http_server
+
+        # Override settings with CLI options if provided
+        actual_proxy = proxy if proxy is not None else http_settings.proxy_url
+        actual_timeout = (
+            timeout if timeout is not None else http_settings.request_timeout
+        )
+        actual_verify_ssl = (
+            verify_ssl if verify_ssl is not None else http_settings.verify_ssl
+        )
+        actual_transport = (
+            transport if transport is not None else http_settings.transport
+        )
+        actual_host = host if host is not None else http_settings.host
+        actual_port = port if port is not None else http_settings.port
+        actual_path = path if path is not None else http_settings.path
+
         # Parse additional tracing headers
         additional_headers = {}
         for header in trace_header:
@@ -89,15 +128,15 @@ def serve_http(
 
         # Create HTTP configuration with injected settings
         base_headers = {
-            "User-Agent": "code-mcp-http-server/0.1.0",
+            "User-Agent": f"{http_settings.server_name}/{http_settings.server_version}",
             "X-MCP-Source": "code-mcp",
         }
         base_headers.update(additional_headers)
 
         http_config = HttpConfig(
-            proxy_url=proxy,
-            timeout=timeout,
-            verify_ssl=verify_ssl,
+            proxy_url=actual_proxy,
+            timeout=actual_timeout,
+            verify_ssl=actual_verify_ssl,
             tracing_headers=base_headers,
         )
 
@@ -105,22 +144,40 @@ def serve_http(
         http_provider = HttpToolProvider(http_config)
 
         # Initialize server and add provider
-        server = FastMcpServerAdapter("code-mcp-http-server")
+        server = FastMcpServerAdapter(http_settings.server_name)
         server.add_tool_provider(http_provider)
 
         # Show configuration
-        click.echo("🚀 Starting HTTP Operations MCP Server")
-        click.echo(f"   Transport: {transport}")
-        click.echo(f"   Timeout: {timeout}s")
-        click.echo(f"   SSL Verification: {verify_ssl}")
-        if proxy:
-            click.echo(f"   Proxy: {proxy}")
-        click.echo(f"   Tracing Headers: {len(base_headers)} headers")
-        for key, value in base_headers.items():
-            click.echo(f"     {key}: {value}")
-        click.echo("\n📡 Ready for HTTP requests from LLM...")
+        click.echo(f"🚀 Starting {http_settings.server_name} MCP Server")
+        click.echo(f"   Transport: {actual_transport}")
 
-        server.start(transport=transport)
+        if actual_transport == "http":
+            click.echo(f"   Endpoint: http://{actual_host}:{actual_port}{actual_path}")
+        elif actual_transport == "sse":
+            click.echo(f"   Endpoint: http://{actual_host}:{actual_port}")
+
+        if actual_proxy:
+            click.echo(f"   Proxy: {actual_proxy}")
+        if not actual_verify_ssl:
+            click.echo("   SSL Verification: Disabled")
+
+        if actual_transport == "stdio":
+            click.echo(
+                "\nTo connect Claude Desktop: claude mcp add code-mcp-http 'code_mcp serve-http'"
+            )
+        else:
+            click.echo(
+                f"\nTo connect Claude Desktop: claude mcp add -t http code-mcp-http http://{actual_host}:{actual_port}{actual_path if actual_transport == 'http' else ''}"
+            )
+
+        click.echo("\n📡 Ready for HTTP requests...")
+
+        server.start(
+            transport=actual_transport,
+            host=actual_host,
+            port=actual_port,
+            path=actual_path,
+        )
 
     _serve_http()
 

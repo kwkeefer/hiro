@@ -1,12 +1,24 @@
 """FastMCP server adapter implementation."""
 
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import Any, Protocol
 
 from fastmcp import FastMCP
 
-from code_mcp.core.mcp.exceptions import ResourceError, ToolError
-from code_mcp.core.mcp.protocols import ResourceProvider, ToolProvider
+from code_mcp.core.mcp.exceptions import ResourceError
+from code_mcp.core.mcp.protocols import ResourceProvider
+
+
+class ToolProviderLike(Protocol):
+    """Protocol for objects that can provide tools via hybrid approach."""
+
+    # No required methods - providers can provide tools in various ways
+
+
+class HttpToolProviderLike(Protocol):
+    """Protocol for HTTP tool providers in hybrid approach."""
+
+    _http_tool: Any
 
 
 class FastMcpServerAdapter:
@@ -19,14 +31,14 @@ class FastMcpServerAdapter:
             name: Server name for MCP identification
         """
         self._mcp = FastMCP(name)
-        self._tool_providers: list[ToolProvider] = []
+        self._tool_providers: list[ToolProviderLike] = []
         self._resource_providers: list[ResourceProvider] = []
 
-    def add_tool_provider(self, provider: ToolProvider) -> None:
+    def add_tool_provider(self, provider: ToolProviderLike) -> None:
         """Add a tool provider to the server.
 
         Args:
-            provider: Object implementing ToolProvider protocol
+            provider: Object that can provide tools (hybrid approach)
         """
         self._tool_providers.append(provider)
         self._register_tools(provider)
@@ -40,33 +52,21 @@ class FastMcpServerAdapter:
         self._resource_providers.append(provider)
         self._register_resources(provider)
 
-    def _register_tools(self, provider: ToolProvider) -> None:
-        """Register tools from a provider with FastMCP."""
-        tools = provider.get_tools()
+    def _register_tools(self, provider: ToolProviderLike) -> None:
+        """Register tools from a provider with FastMCP.
 
-        for tool_def in tools:
-            tool_name = tool_def["name"]
-
-            def make_tool_wrapper(
-                name: str, prov: ToolProvider
-            ) -> Callable[..., Awaitable[Any]]:
-                async def tool_wrapper(arguments: dict[str, Any] | None = None) -> Any:
-                    """Wrapper function for tool execution."""
-                    if arguments is None:
-                        arguments = {}
-                    try:
-                        return await prov.call_tool(name, arguments)
-                    except Exception as e:
-                        raise ToolError(name, str(e)) from e
-
-                return tool_wrapper
-
-            # Register with FastMCP
+        Uses hybrid approach: protocols for organization, direct registration for simplicity.
+        """
+        # Register HTTP tools directly for better FastMCP compatibility
+        if hasattr(provider, "_http_tool"):
             self._mcp.tool(
-                make_tool_wrapper(tool_name, provider),
-                name=tool_name,
-                description=tool_def.get("description", ""),
+                provider._http_tool.execute,
+                name="http_request",
+                description="Make HTTP request with full control over headers, data, and parameters.",
             )
+
+        # For future tool types, we can add similar direct registrations here
+        # This avoids the complexity of generic wrappers while keeping provider organization
 
     def _register_resources(self, provider: ResourceProvider) -> None:
         """Register resources from a provider with FastMCP."""
@@ -95,15 +95,28 @@ class FastMcpServerAdapter:
                 mime_type=resource_def.get("mimeType", "text/plain"),
             )(make_resource_wrapper(resource_uri, provider))
 
-    def start(self, transport: str = "stdio", **_kwargs: Any) -> None:
+    def start(self, transport: str = "http", **kwargs: Any) -> None:
         """Start the MCP server.
 
         Args:
-            transport: Transport type (stdio, sse, etc.)
-            **_kwargs: Additional server configuration (currently unused)
+            transport: Transport type (http, stdio, sse)
+            **kwargs: Additional server configuration (host, port, path for HTTP)
         """
         if transport == "stdio":
             self._mcp.run(transport="stdio")
+        elif transport == "http":
+            # HTTP streaming transport (recommended)
+            host = kwargs.get("host", "127.0.0.1")
+            port = kwargs.get("port", 8000)
+            path = kwargs.get("path", "/mcp")
+            print(f"Starting HTTP MCP server at http://{host}:{port}{path}")
+            self._mcp.run(transport="http", host=host, port=port, path=path)
+        elif transport == "sse":
+            # SSE transport (deprecated but supported)
+            host = kwargs.get("host", "127.0.0.1")
+            port = kwargs.get("port", 8000)
+            print(f"Starting SSE MCP server at http://{host}:{port}")
+            self._mcp.run(transport="sse", host=host, port=port)
         else:
             raise ValueError(f"Unsupported transport: {transport}")
 

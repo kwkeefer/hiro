@@ -67,7 +67,7 @@ class HttpRequestTool:
 
             # Inject proxy from server config if configured
             if self._config.proxy_url:
-                client_config["proxies"] = self._config.proxy_url
+                client_config["proxy"] = self._config.proxy_url
 
             # Merge headers: injected tracing headers + user headers
             merged_headers: dict[str, str] = {}

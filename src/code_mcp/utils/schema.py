@@ -1,7 +1,6 @@
 """Utilities for generating MCP tool schemas from function signatures."""
 
 import inspect
-import re
 from collections.abc import Callable
 from typing import Any, get_args, get_origin, get_type_hints
 
@@ -19,25 +18,28 @@ def python_type_to_json_schema(python_type: type) -> dict[str, Any]:
     args = get_args(python_type)
 
     # Handle Union types (including Optional)
-    if (origin is not None and str(origin) == "<class 'types.UnionType'>") or (
+    if origin is not None:
+        origin_str = str(origin)
+        if "UnionType" in origin_str or (
+            hasattr(origin, "__name__") and origin.__name__ == "Union"
+        ):
+            # Check if it's Optional (Union with None)
+            if len(args) == 2 and type(None) in args:
+                non_none_type = next(arg for arg in args if arg is not type(None))
+                schema = python_type_to_json_schema(non_none_type)
+                # Optional types don't need to be in required array
+                return schema
+            else:
+                # For other unions, use the first type (could be improved)
+                return python_type_to_json_schema(args[0])
+
+    # Handle Literal types specifically
+    if (
         origin is not None
         and hasattr(origin, "__name__")
-        and origin.__name__ == "Union"
+        and origin.__name__ == "Literal"
     ):
-        # Check if it's Optional (Union with None)
-        if len(args) == 2 and type(None) in args:
-            non_none_type = next(arg for arg in args if arg is not type(None))
-            schema = python_type_to_json_schema(non_none_type)
-            # Optional types don't need to be in required array
-            return schema
-        else:
-            # For other unions, use the first type (could be improved)
-            return python_type_to_json_schema(args[0])
-
-    # Handle Literal types
-    if hasattr(python_type, "__origin__") and hasattr(python_type, "__args__"):
-        # This is a bit hacky, but works for Literal types
-        return {"type": "string", "enum": list(python_type.__args__)}
+        return {"type": "string", "enum": list(args)}
 
     # Handle basic types
     if python_type is str:
@@ -52,25 +54,9 @@ def python_type_to_json_schema(python_type: type) -> dict[str, Any]:
         item_type = args[0] if args else str
         return {"type": "array", "items": python_type_to_json_schema(item_type)}
     elif python_type is dict or origin is dict:
-        if len(args) >= 2:
-            return {
-                "type": "object",
-                "additionalProperties": python_type_to_json_schema(args[1]),
-            }
-        else:
-            return {"type": "object"}
+        # For dict types, return a proper object schema
+        return {"type": "object", "additionalProperties": {"type": "string"}}
     else:
-        # Check for Literal types using string representation
-        str_type = str(python_type)
-        if "Literal" in str_type:
-            # Extract values from Literal type string representation
-            match = re.search(r"Literal\[(.*?)\]", str_type)
-            if match:
-                values_str = match.group(1)
-                # Parse the values (simple implementation)
-                values = [v.strip().strip("'\"") for v in values_str.split(",")]
-                return {"type": "string", "enum": values}
-
         # Default to string for unknown types
         return {"type": "string"}
 
