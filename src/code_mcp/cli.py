@@ -1,16 +1,83 @@
 """Command-line interface for code-mcp."""
 
-import sys
-
-sys.path.insert(0, ".")
+import asyncio
+import functools
 
 import click
+from alembic import command
+from alembic.config import Config
+from alembic.runtime.migration import MigrationContext
+from sqlalchemy import create_engine
+from sqlalchemy.ext.asyncio import create_async_engine
 
 from code_mcp import __version__
 from code_mcp.api.mcp.server import FastMcpServerAdapter
 from code_mcp.core.config.settings import get_settings
+from code_mcp.db import initialize_database, test_connection
+from code_mcp.db.models import Base
 from code_mcp.servers.http.config import HttpConfig
 from code_mcp.servers.http.providers import HttpToolProvider
+
+
+class DatabaseCommandRunner:
+    """Helper class for consistent database command execution."""
+
+    def __init__(self, settings):
+        self.settings = settings
+
+    def validate_config(self) -> None:
+        """Validate database configuration."""
+        if not self.settings.database.url:
+            raise click.ClickException(
+                "❌ Database URL not configured. Please set DATABASE_URL environment variable."
+            )
+
+    async def test_connection_safe(self) -> None:
+        """Test database connection with consistent error handling."""
+        click.echo("🔍 Testing database connection...")
+        await test_connection(self.settings.database)
+        click.echo("✅ Database connection successful")
+
+    def get_alembic_config(self) -> Config:
+        """Get Alembic configuration."""
+        return Config("alembic.ini")
+
+    def get_current_migration_revision(self) -> str | None:
+        """Get current migration revision using Alembic Python API."""
+        try:
+            # Create synchronous engine for Alembic
+            sync_url = self.settings.database.url.replace("+asyncpg", "")
+            engine = create_engine(sync_url)
+
+            with engine.connect() as connection:
+                context = MigrationContext.configure(connection)
+                current_rev = context.get_current_revision()
+                return str(current_rev) if current_rev else None
+
+        except Exception:
+            return None
+
+
+def run_async_db_command(command_func):
+    """Decorator to run async database commands consistently."""
+
+    @functools.wraps(command_func)
+    def wrapper(*args, **kwargs):
+        async def _run():
+            settings = get_settings()
+            runner = DatabaseCommandRunner(settings)
+            try:
+                runner.validate_config()
+                return await command_func(runner, *args, **kwargs)
+            except Exception as e:
+                if not isinstance(e, click.ClickException):
+                    click.echo(f"❌ Command failed: {e}")
+                    raise click.Abort() from e
+                raise
+
+        return asyncio.run(_run())
+
+    return wrapper
 
 
 @click.group()
@@ -150,8 +217,34 @@ def serve_http(
             default_cookies_file=cookies_file,
         )
 
-        # Create HTTP tool provider with injected config
-        http_provider = HttpToolProvider(http_config)
+        # Initialize database repositories if logging is enabled
+        http_repo = None
+        target_repo = None
+        if settings.database.logging_enabled:
+            try:
+                # Initialize database but don't create session factory yet
+                # We'll let the repositories handle that in their own event loop
+                click.echo("   Database Logging: Enabled (lazy initialization)")
+
+                # Create wrapper repositories that will initialize on first use
+                from code_mcp.db.lazy_repository import (
+                    LazyHttpRequestRepository,
+                    LazyTargetRepository,
+                )
+
+                http_repo = LazyHttpRequestRepository(settings.database)
+                target_repo = LazyTargetRepository(settings.database)
+
+            except Exception as e:
+                click.echo(f"   Database Logging: Failed to configure - {e}")
+                click.echo("   Continuing without database logging...")
+                http_repo = None
+                target_repo = None
+
+        # Create HTTP tool provider with injected config and repositories
+        http_provider = HttpToolProvider(
+            http_config, http_repo=http_repo, target_repo=target_repo
+        )
 
         # Initialize server and add provider
         server = FastMcpServerAdapter(http_settings.server_name)
@@ -192,6 +285,89 @@ def serve_http(
         )
 
     _serve_http()
+
+
+@cli.group()
+def db() -> None:
+    """Database management commands."""
+    pass
+
+
+@db.command()
+@click.option(
+    "--drop-existing",
+    is_flag=True,
+    help="Drop existing database tables before initialization",
+)
+@run_async_db_command
+async def init(runner: DatabaseCommandRunner, drop_existing: bool) -> None:
+    """Initialize the database with tables and migrations."""
+    # Test connection first
+    await runner.test_connection_safe()
+
+    # Initialize database
+    click.echo("🚀 Initializing database...")
+
+    if drop_existing:
+        engine = create_async_engine(runner.settings.database.url)
+        async with engine.begin() as conn:
+            click.echo("🗑️  Dropping existing tables...")
+            await conn.run_sync(Base.metadata.drop_all)
+        await engine.dispose()
+
+    initialize_database(runner.settings.database)
+    click.echo("✅ Database initialized successfully")
+
+
+@db.command()
+def migrate() -> None:
+    """Run database migrations using Alembic."""
+    click.echo("🔄 Running database migrations...")
+    try:
+        # Load alembic configuration and run migration
+        alembic_cfg = Config("alembic.ini")
+        command.upgrade(alembic_cfg, "head")
+        click.echo("✅ Migrations completed successfully")
+
+    except Exception as e:
+        click.echo(f"❌ Migration failed: {e}")
+        raise click.Abort() from e
+
+
+@db.command()
+@click.confirmation_option(
+    prompt="Are you sure you want to reset the database? This will delete all data."
+)
+@run_async_db_command
+async def reset(runner: DatabaseCommandRunner) -> None:
+    """Reset the database by dropping all tables and recreating them."""
+    engine = create_async_engine(runner.settings.database.url)
+
+    async with engine.begin() as conn:
+        click.echo("🗑️  Dropping all tables...")
+        await conn.run_sync(Base.metadata.drop_all)
+        click.echo("🏗️  Creating tables...")
+        await conn.run_sync(Base.metadata.create_all)
+
+    await engine.dispose()
+    click.echo("✅ Database reset completed successfully")
+
+
+@db.command()
+@run_async_db_command
+async def status(runner: DatabaseCommandRunner) -> None:
+    """Check database connection and show current migration status."""
+    # Test connection
+    await runner.test_connection_safe()
+
+    # Show migration status
+    click.echo("\n📊 Migration Status:")
+    current_rev = runner.get_current_migration_revision()
+
+    if current_rev:
+        click.echo(f"Current revision: {current_rev}")
+    else:
+        click.echo("No migrations have been run yet")
 
 
 def main() -> None:

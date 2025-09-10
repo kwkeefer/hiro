@@ -6,7 +6,7 @@ Handles loading configuration from environment variables and config files.
 
 from typing import Any
 
-from pydantic import Field, ValidationInfo, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -22,17 +22,41 @@ class DatabaseSettings(BaseSettings):
     username: str = Field(default="code_mcp_user", alias="POSTGRES_USER")
     password: str = Field(default="", alias="POSTGRES_PASSWORD")
 
-    @field_validator("url", mode="before")
+    # Database logging configuration
+    logging_enabled: bool = Field(default=True, alias="DB_LOGGING_ENABLED")
+    max_request_body_size: int = Field(
+        default=1024 * 1024, alias="DB_MAX_REQUEST_BODY_SIZE"
+    )  # 1MB
+    max_response_body_size: int = Field(
+        default=1024 * 1024, alias="DB_MAX_RESPONSE_BODY_SIZE"
+    )  # 1MB
+    retention_days: int = Field(default=30, alias="DB_RETENTION_DAYS")
+
+    # Connection pool settings
+    pool_size: int = Field(default=5, alias="DB_POOL_SIZE")
+    max_overflow: int = Field(default=10, alias="DB_MAX_OVERFLOW")
+    pool_timeout: int = Field(default=30, alias="DB_POOL_TIMEOUT")
+
+    # Sensitive headers to filter from logs (comma-separated string in env)
+    sensitive_headers: list[str] = Field(
+        default=["authorization", "cookie", "x-api-key", "x-auth-token"],
+        alias="DB_SENSITIVE_HEADERS",
+    )
+
+    @field_validator("sensitive_headers", mode="before")
     @classmethod
-    def assemble_db_connection(cls, v: Any, info: ValidationInfo) -> str | None:
-        if v:
-            return str(v)
-        values = info.data
-        if all(
-            k in values for k in ["username", "password", "host", "port", "database"]
+    def parse_sensitive_headers(cls, v: Any) -> list[str]:
+        if isinstance(v, str):
+            return [header.strip() for header in v.split(",") if header.strip()]
+        return list(v) if v else []
+
+    @model_validator(mode="after")
+    def assemble_db_connection(self) -> "DatabaseSettings":
+        if not self.url and all(
+            [self.username, self.password, self.host, self.port, self.database]
         ):
-            return f"postgresql://{values['username']}:{values['password']}@{values['host']}:{values['port']}/{values['database']}"
-        return None
+            self.url = f"postgresql+asyncpg://{self.username}:{self.password}@{self.host}:{self.port}/{self.database}"
+        return self
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 

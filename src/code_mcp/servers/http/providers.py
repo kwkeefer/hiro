@@ -1,5 +1,15 @@
 """HTTP tool providers with configuration injection."""
 
+from typing import TYPE_CHECKING, Union
+
+from code_mcp.db.repositories import HttpRequestRepository, TargetRepository
+
+if TYPE_CHECKING:
+    from code_mcp.db.lazy_repository import (
+        LazyHttpRequestRepository,
+        LazyTargetRepository,
+    )
+
 from .config import HttpConfig
 from .tools import HttpRequestTool
 
@@ -11,14 +21,33 @@ class HttpToolProvider:
     while allowing direct tool registration for FastMCP compatibility.
     """
 
-    def __init__(self, config: HttpConfig):
-        """Initialize with server configuration.
+    def __init__(
+        self,
+        config: HttpConfig,
+        http_repo: Union[
+            HttpRequestRepository, "LazyHttpRequestRepository", None
+        ] = None,
+        target_repo: Union[TargetRepository, "LazyTargetRepository", None] = None,
+        session_id: str | None = None,
+    ):
+        """Initialize with server configuration and optional database repositories.
 
         Args:
             config: HTTP server configuration for proxy, headers, etc.
+            http_repo: Repository for logging HTTP requests (optional)
+            target_repo: Repository for managing targets (optional)
+            session_id: Current AI session ID for linking requests (optional)
         """
         self._config = config
-        self._http_tool = HttpRequestTool(config)
+        self._http_repo = http_repo
+        self._target_repo = target_repo
+        self._session_id = session_id
+        self._http_tool = HttpRequestTool(
+            config=config,
+            http_repo=http_repo,
+            target_repo=target_repo,
+            session_id=session_id,
+        )
 
     @property
     def config(self) -> HttpConfig:

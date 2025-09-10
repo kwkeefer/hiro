@@ -17,6 +17,12 @@ class HttpConfig:
     default_cookies_file: str | None = None
     default_cookies: dict[str, str] | None = None
 
+    # Database logging configuration
+    logging_enabled: bool = True
+    max_request_body_size: int = 1024 * 1024  # 1MB
+    max_response_body_size: int = 1024 * 1024  # 1MB
+    sensitive_headers: list[str] | None = None
+
     def __post_init__(self) -> None:
         """Initialize default tracing headers and load cookies from file."""
         if self.tracing_headers is None:
@@ -30,6 +36,10 @@ class HttpConfig:
             self._load_cookies_from_file()
         elif self.default_cookies is None:
             self.default_cookies = {}
+
+        # Initialize empty sensitive headers - log everything by default
+        if self.sensitive_headers is None:
+            self.sensitive_headers = []
 
     def _load_cookies_from_file(self) -> None:
         """Load cookies from JSON file."""
