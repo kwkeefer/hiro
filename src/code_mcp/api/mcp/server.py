@@ -21,6 +21,15 @@ class HttpToolProviderLike(Protocol):
     _http_tool: Any
 
 
+class AiLoggingToolProviderLike(Protocol):
+    """Protocol for AI logging tool providers in hybrid approach."""
+
+    _create_target_tool: Any
+    _update_target_tool: Any
+    _get_summary_tool: Any
+    _search_targets_tool: Any
+
+
 class FastMcpServerAdapter:
     """Adapter that makes FastMCP work with our protocols."""
 
@@ -63,6 +72,35 @@ class FastMcpServerAdapter:
                 provider._http_tool.execute,
                 name="http_request",
                 description="Make HTTP request with full control over headers, data, and parameters.",
+            )
+
+        # Register AI logging tools for target management
+        if hasattr(provider, "_create_target_tool"):
+            self._mcp.tool(
+                provider._create_target_tool.execute,
+                name="create_target",
+                description="Register a new target for testing with host, port, protocol, and metadata.",
+            )
+
+        if hasattr(provider, "_update_target_tool"):
+            self._mcp.tool(
+                provider._update_target_tool.execute,
+                name="update_target_status",
+                description="Update target status, risk level, and metadata.",
+            )
+
+        if hasattr(provider, "_get_summary_tool"):
+            self._mcp.tool(
+                provider._get_summary_tool.execute,
+                name="get_target_summary",
+                description="Get comprehensive target summary with statistics on notes, attempts, and requests.",
+            )
+
+        if hasattr(provider, "_search_targets_tool"):
+            self._mcp.tool(
+                provider._search_targets_tool.execute,
+                name="search_targets",
+                description="Search and filter targets by host, status, risk level, or protocol.",
             )
 
         # For future tool types, we can add similar direct registrations here

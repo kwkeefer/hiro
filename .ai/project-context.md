@@ -71,25 +71,46 @@ code_mcp/
 
 ## Architecture Notes
 
+### MCP Server Architecture - Unified Server, Multiple Tool Categories
+
+**IMPORTANT**: Despite having multiple directories under `servers/`, there is only **ONE** MCP server.
+
+```
+src/code_mcp/servers/           # Tool collections for the unified server
+├── http/                        # HTTP request tools (core functionality)
+│   ├── tools.py                 # HTTP request execution
+│   ├── providers.py             # Tool provider with config injection
+│   └── config.py                # HTTP-specific configuration
+└── ai_logging/                  # Target management tools (database features)
+    ├── tools.py                 # Target CRUD operations
+    ├── providers.py             # Tool provider with DB repositories
+    └── (works WITH http/, not separately)
+```
+
+When you run `code_mcp serve-http`:
+- **Always includes**: HTTP request tools
+- **When DB configured**: Also includes target management tools
+- **Result**: Single unified server with multiple tool categories
+
 ### FastMCP Integration Philosophy - Hybrid Approach
 We use a **hybrid approach** that balances architectural purity with pragmatic simplicity:
 
 #### What We Keep (Protocol Organization)
-- **Provider classes** - `HttpToolProvider` organizes HTTP tools with dependency injection
+- **Provider classes** - `HttpToolProvider` and `AiLoggingToolProvider` organize tools with dependency injection
 - **Business logic isolation** - Tool implementations (`HttpRequestTool.execute()`) are pure business logic
 - **Testable structure** - Can unit test tools without FastMCP dependencies
-- **Clear module boundaries** - HTTP tools live in `servers/http/`, server adapter in `api/mcp/`
+- **Clear module boundaries** - Tool categories live in separate `servers/` subdirectories
 
 #### What We Simplified (Direct Registration)
 - **No generic wrappers** - Register tool functions directly with FastMCP instead of through protocol methods
-- **FastMCP-aware registration** - Server adapter knows about specific tool types (HTTP, future: DB, etc.)
+- **FastMCP-aware registration** - Server adapter knows about specific tool types (HTTP, AI logging, etc.)
 - **Pragmatic coupling** - Accept that changing MCP implementations means updating the adapter
 
 #### Why This Works
 - **FastMCP is lightweight** - Not a heavy framework requiring full abstraction
 - **Registration is simple** - One line per tool, not worth complex generic wrappers
 - **Business logic stays clean** - Tools don't know about FastMCP, only providers do
-- **Architecture scales** - Easy to add new tool types with direct registration
+- **Architecture scales** - Easy to add new tool categories with direct registration
 
 **Key principle**: Use protocols for **organization and testing**, direct registration for **simplicity and compatibility**.
 

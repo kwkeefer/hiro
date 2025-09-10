@@ -17,6 +17,12 @@ from .tools import HttpRequestTool
 class HttpToolProvider:
     """Tool provider for HTTP operations with injected configuration.
 
+    IMPORTANT: This provider is part of the unified serve-http server.
+    It provides HTTP request tools that are always available.
+
+    When DATABASE_URL is configured, these tools work seamlessly with
+    the AI logging tools from servers/ai_logging/ in the SAME server.
+
     Uses hybrid approach: provides organized structure and testable business logic,
     while allowing direct tool registration for FastMCP compatibility.
     """

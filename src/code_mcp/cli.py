@@ -157,18 +157,28 @@ def serve_http(
     header: tuple[str, ...],
     cookies_file: str | None,
 ) -> None:
-    """Start HTTP operations MCP server with configuration.
+    """Start unified MCP server with HTTP and database tools.
 
-    This server provides HTTP request tools with automatic proxy routing,
-    custom header injection, and cookie persistence. Perfect for red team
-    operations where you need to route all traffic through tools like Burp Suite.
+    This is a SINGLE server that provides multiple tool categories:
+    - HTTP request tools (always available)
+    - Target management tools (when DATABASE_URL is configured)
+
+    All tools run in the same server instance and work together seamlessly.
+    HTTP requests auto-log to the database and create/update targets.
+
+    Available tools:
+    - Always: http_request
+    - With database: create_target, update_target_status, get_target_summary, search_targets
+
+    Perfect for red team operations where you need to route all traffic through
+    tools like Burp Suite while maintaining a database of discovered targets.
 
     Examples:
         code_mcp serve-http --proxy http://127.0.0.1:8080
         code_mcp serve-http --proxy http://127.0.0.1:8080 --no-verify-ssl
         code_mcp serve-http -H "X-Team=RedTeam" -H "Authorization=Bearer token123"
         code_mcp serve-http --cookies-file /path/to/session_cookies.json
-        code_mcp serve-http --proxy http://127.0.0.1:8080 -H "X-Custom=Value" -c /path/to/cookies.json
+        DATABASE_URL=postgresql://... code_mcp serve-http  # Enables all features
     """
 
     def _serve_http() -> None:
@@ -220,11 +230,13 @@ def serve_http(
         # Initialize database repositories if logging is enabled
         http_repo = None
         target_repo = None
+        ai_logging_provider = None
         if settings.database.logging_enabled:
             try:
                 # Initialize database but don't create session factory yet
                 # We'll let the repositories handle that in their own event loop
                 click.echo("   Database Logging: Enabled (lazy initialization)")
+                click.echo("   AI Target Management: Enabled")
 
                 # Create wrapper repositories that will initialize on first use
                 from code_mcp.db.lazy_repository import (
@@ -235,20 +247,34 @@ def serve_http(
                 http_repo = LazyHttpRequestRepository(settings.database)
                 target_repo = LazyTargetRepository(settings.database)
 
+                # Create AI logging provider for target management tools
+                from code_mcp.servers.ai_logging import AiLoggingToolProvider
+
+                ai_logging_provider = AiLoggingToolProvider(target_repo=target_repo)
+
             except Exception as e:
                 click.echo(f"   Database Logging: Failed to configure - {e}")
                 click.echo("   Continuing without database logging...")
                 http_repo = None
                 target_repo = None
+                ai_logging_provider = None
 
         # Create HTTP tool provider with injected config and repositories
         http_provider = HttpToolProvider(
             http_config, http_repo=http_repo, target_repo=target_repo
         )
 
-        # Initialize server and add provider
+        # Initialize SINGLE unified server and add all tool providers
+        # IMPORTANT: This is ONE server with multiple tool categories, not multiple servers!
         server = FastMcpServerAdapter(http_settings.server_name)
+
+        # Add HTTP tools (always available)
         server.add_tool_provider(http_provider)
+
+        # Add AI logging/target management tools (when database is configured)
+        # These tools work alongside HTTP tools in the SAME server instance
+        if ai_logging_provider:
+            server.add_tool_provider(ai_logging_provider)
 
         # Show configuration
         click.echo(f"🚀 Starting {http_settings.server_name} MCP Server")
@@ -265,6 +291,15 @@ def serve_http(
             click.echo("   SSL Verification: Disabled")
         if cookies_file:
             click.echo(f"   Cookie Injection: {cookies_file}")
+
+        # Show available tools
+        click.echo("\n📦 Available Tools:")
+        click.echo("   • http_request - Make HTTP requests with full control")
+        if ai_logging_provider:
+            click.echo("   • create_target - Register new targets for testing")
+            click.echo("   • update_target_status - Update target status and metadata")
+            click.echo("   • get_target_summary - Get comprehensive target information")
+            click.echo("   • search_targets - Search and filter targets")
 
         if actual_transport == "stdio":
             click.echo(
