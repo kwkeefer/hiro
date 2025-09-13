@@ -10,6 +10,8 @@ import pytest
 src_path = Path(__file__).parent.parent / "src"
 sys.path.insert(0, str(src_path))
 
+from tests.fixtures.docker import docker_test_db  # noqa: F401, E402
+
 
 def pytest_configure(config):  # noqa: ARG001
     """Configure pytest environment before tests run."""

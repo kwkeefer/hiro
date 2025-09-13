@@ -12,6 +12,7 @@ from .models import (
     AttemptType,
     Base,
     ConfidenceLevel,
+    ContextChangeType,
     HttpRequest,
     NoteType,
     RequestTag,
@@ -20,6 +21,7 @@ from .models import (
     SessionTarget,
     Target,
     TargetAttempt,
+    TargetContext,
     TargetNote,
     TargetRequest,
     # Enums
@@ -30,6 +32,7 @@ from .repositories import (
     HttpRequestRepository,
     RequestTagRepository,
     TargetAttemptRepository,
+    TargetContextRepository,
     TargetNoteRepository,
     TargetRepository,
 )
@@ -86,6 +89,7 @@ __all__ = [
     # Models
     "Base",
     "Target",
+    "TargetContext",
     "TargetNote",
     "TargetAttempt",
     "AiSession",
@@ -98,10 +102,12 @@ __all__ = [
     "RiskLevel",
     "NoteType",
     "ConfidenceLevel",
+    "ContextChangeType",
     "AttemptType",
     "SessionStatus",
     # Repositories
     "TargetRepository",
+    "TargetContextRepository",
     "TargetNoteRepository",
     "TargetAttemptRepository",
     "AiSessionRepository",

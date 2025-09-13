@@ -60,11 +60,7 @@ class TestDatabaseManager:
     async def teardown(self) -> None:
         """Clean up test database."""
         if self.engine:
-            # Drop all tables
-            async with self.engine.begin() as conn:
-                await conn.run_sync(Base.metadata.drop_all)
-
-            # Dispose of the engine
+            # Just dispose of the engine - Docker will handle cleanup
             await self.engine.dispose()
             self.engine = None
             self.session_factory = None

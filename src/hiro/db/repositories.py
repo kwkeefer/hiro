@@ -11,12 +11,14 @@ from sqlalchemy.ext.asyncio.session import async_sessionmaker
 
 from .models import (
     AiSession,
+    ContextChangeType,
     HttpRequest,
     RequestTag,
     RiskLevel,
     SessionTarget,
     Target,
     TargetAttempt,
+    TargetContext,
     TargetNote,
     TargetRequest,
     TargetStatus,
@@ -777,3 +779,220 @@ class RequestTagRepository:
             )
         )
         return bool(result.rowcount > 0)
+
+
+class TargetContextRepository:
+    """Repository for immutable target context versions."""
+
+    def __init__(
+        self, session_or_factory: async_sessionmaker[AsyncSession] | AsyncSession
+    ):
+        # Support both session factory and direct session for backward compatibility
+        if isinstance(session_or_factory, async_sessionmaker):
+            self.session_factory = session_or_factory
+            self.session = None
+        else:
+            self.session = session_or_factory
+            self.session_factory = None
+
+    async def _get_session(self) -> AsyncSession:
+        """Get a database session."""
+        if self.session:
+            return self.session
+        if self.session_factory:
+            return self.session_factory()
+        raise RuntimeError("No session or session factory available")
+
+    async def create_version(
+        self,
+        target_id: UUID,
+        user_context: str | None = None,
+        agent_context: str | None = None,
+        created_by: str = "user",
+        change_summary: str | None = None,
+        change_type: ContextChangeType = ContextChangeType.USER_EDIT,
+        parent_version_id: UUID | None = None,
+        is_major_version: bool = False,
+    ) -> TargetContext:
+        """Create a new immutable context version for a target.
+
+        Args:
+            target_id: Target UUID
+            user_context: User markdown context
+            agent_context: Agent markdown context
+            created_by: Who created this version ('user' or 'agent')
+            change_summary: Description of what changed
+            change_type: Type of change
+            parent_version_id: Previous version ID (if not provided, uses current)
+            is_major_version: Whether this is a major version
+
+        Returns:
+            New context version
+        """
+        session = await self._get_session()
+
+        # Get the next version number
+        result = await session.execute(
+            select(func.coalesce(func.max(TargetContext.version), 0)).where(
+                TargetContext.target_id == target_id
+            )
+        )
+        next_version = result.scalar() + 1
+
+        # If no parent specified, get the current version
+        if parent_version_id is None:
+            target_result = await session.execute(
+                select(Target.current_context_id).where(Target.id == target_id)
+            )
+            current_id = target_result.scalar_one_or_none()
+            if current_id:
+                parent_version_id = current_id
+
+        # Count tokens if content provided
+        tokens_count = None
+        if user_context or agent_context:
+            # Simple approximation: ~4 chars per token
+            total_text = (user_context or "") + (agent_context or "")
+            tokens_count = len(total_text) // 4
+
+        # Create new context version
+        context = TargetContext(
+            target_id=target_id,
+            version=next_version,
+            user_context=user_context,
+            agent_context=agent_context,
+            parent_version_id=parent_version_id,
+            change_type=change_type,
+            change_summary=change_summary,
+            created_by=created_by,
+            is_major_version=is_major_version,
+            tokens_count=tokens_count,
+        )
+
+        session.add(context)
+        await session.flush()
+
+        # Update target's current_context_id
+        await session.execute(
+            update(Target)
+            .where(Target.id == target_id)
+            .values(current_context_id=context.id)
+        )
+
+        if not self.session:
+            await session.commit()
+
+        return context
+
+    async def get_current(self, target_id: UUID) -> TargetContext | None:
+        """Get the current context version for a target."""
+        session = await self._get_session()
+
+        # Get target's current context ID
+        target_result = await session.execute(
+            select(Target.current_context_id).where(Target.id == target_id)
+        )
+        current_id = target_result.scalar_one_or_none()
+
+        if not current_id:
+            return None
+
+        # Get the context
+        result = await session.execute(
+            select(TargetContext).where(TargetContext.id == current_id)
+        )
+        return cast(TargetContext | None, result.scalar_one_or_none())
+
+    async def get_version(self, context_id: UUID) -> TargetContext | None:
+        """Get a specific context version by ID."""
+        session = await self._get_session()
+        result = await session.execute(
+            select(TargetContext).where(TargetContext.id == context_id)
+        )
+        return cast(TargetContext | None, result.scalar_one_or_none())
+
+    async def list_versions(
+        self, target_id: UUID, limit: int = 10, offset: int = 0
+    ) -> list[TargetContext]:
+        """Get version history for a target."""
+        session = await self._get_session()
+
+        query = (
+            select(TargetContext)
+            .where(TargetContext.target_id == target_id)
+            .order_by(TargetContext.version.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+
+        result = await session.execute(query)
+        return list(result.scalars().all())
+
+    async def search_contexts(
+        self,
+        query_text: str,
+        target_ids: list[UUID] | None = None,
+        limit: int = 50,
+    ) -> list[tuple[TargetContext, Target]]:
+        """Full-text search across context fields.
+
+        Returns list of (context, target) tuples.
+        """
+        session = await self._get_session()
+
+        # Build search query
+        search_term = f"%{query_text}%"
+        query = (
+            select(TargetContext, Target)
+            .join(Target, Target.id == TargetContext.target_id)
+            .where(
+                or_(
+                    TargetContext.user_context.ilike(search_term),
+                    TargetContext.agent_context.ilike(search_term),
+                    TargetContext.change_summary.ilike(search_term),
+                )
+            )
+        )
+
+        if target_ids:
+            query = query.where(TargetContext.target_id.in_(target_ids))
+
+        query = query.order_by(TargetContext.created_at.desc()).limit(limit)
+
+        result = await session.execute(query)
+        return list(result.all())
+
+    async def get_version_by_number(
+        self, target_id: UUID, version: int
+    ) -> TargetContext | None:
+        """Get a specific version number for a target."""
+        session = await self._get_session()
+        result = await session.execute(
+            select(TargetContext).where(
+                and_(
+                    TargetContext.target_id == target_id,
+                    TargetContext.version == version,
+                )
+            )
+        )
+        return cast(TargetContext | None, result.scalar_one_or_none())
+
+    async def rollback_to_version(
+        self, target_id: UUID, version_id: UUID
+    ) -> TargetContext:
+        """Create a new version that rolls back to a previous version."""
+        # Get the version to rollback to
+        rollback_to = await self.get_version(version_id)
+        if not rollback_to:
+            raise ValueError(f"Version {version_id} not found")
+
+        # Create new version with content from old version
+        return await self.create_version(
+            target_id=target_id,
+            user_context=rollback_to.user_context,
+            agent_context=rollback_to.agent_context,
+            created_by="system",
+            change_summary=f"Rolled back to version {rollback_to.version}",
+            change_type=ContextChangeType.ROLLBACK,
+            parent_version_id=rollback_to.id,
+        )

@@ -11,6 +11,7 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     Numeric,
@@ -20,6 +21,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import UUID as PostgresUUID
 from sqlalchemy.ext.asyncio import AsyncAttrs
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -87,6 +89,15 @@ class SessionStatus(str, Enum):
     FAILED = "failed"
 
 
+class ContextChangeType(str, Enum):
+    """Context change type options."""
+
+    USER_EDIT = "user_edit"
+    AGENT_UPDATE = "agent_update"
+    INITIAL = "initial"
+    ROLLBACK = "rollback"
+
+
 # Core Models
 class Target(Base):
     """Target hosts/endpoints for testing."""
@@ -113,6 +124,12 @@ class Target(Base):
         String(10), nullable=False, default=RiskLevel.MEDIUM
     )
     extra_data: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+
+    # Link to current context version
+    current_context_id: Mapped[UUID | None] = mapped_column(
+        PostgresUUID(as_uuid=True), nullable=True
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -124,6 +141,19 @@ class Target(Base):
     )
 
     # Relationships
+    current_context: Mapped[Optional["TargetContext"]] = relationship(
+        "TargetContext",
+        foreign_keys=[current_context_id],
+        primaryjoin="Target.current_context_id == TargetContext.id",
+        post_update=True,  # Handle circular dependency
+    )
+    context_versions: Mapped[list["TargetContext"]] = relationship(
+        "TargetContext",
+        foreign_keys="TargetContext.target_id",
+        back_populates="target",
+        cascade="all, delete-orphan",
+        order_by="desc(TargetContext.version)",
+    )
     notes: Mapped[list["TargetNote"]] = relationship(
         "TargetNote", back_populates="target", cascade="all, delete-orphan"
     )
@@ -141,6 +171,85 @@ class Target(Base):
         UniqueConstraint("host", "port", "protocol", name="uq_target_endpoint"),
         Index("ix_target_host_activity", "host", "last_activity"),
         Index("ix_target_status_risk", "status", "risk_level"),
+        Index("ix_target_current_context", "current_context_id"),
+        ForeignKeyConstraint(
+            ["current_context_id"],
+            ["target_contexts.id"],
+            name="fk_targets_current_context",
+            use_alter=True,
+            ondelete="SET NULL",
+        ),
+    )
+
+
+class TargetContext(Base):
+    """Immutable context versions for targets."""
+
+    __tablename__ = "target_contexts"
+
+    # Primary key and versioning
+    id: Mapped[UUID] = mapped_column(
+        PostgresUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    target_id: Mapped[UUID] = mapped_column(
+        PostgresUUID(as_uuid=True),
+        ForeignKey("targets.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    # Context content
+    user_context: Mapped[str | None] = mapped_column(Text, nullable=True)
+    agent_context: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Versioning metadata
+    parent_version_id: Mapped[UUID | None] = mapped_column(
+        PostgresUUID(as_uuid=True),
+        ForeignKey("target_contexts.id"),
+        nullable=True,
+    )
+    change_type: Mapped[ContextChangeType] = mapped_column(String(20), nullable=False)
+    change_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by: Mapped[str] = mapped_column(
+        String(50), nullable=False
+    )  # 'user' or 'agent'
+
+    # Metadata
+    is_major_version: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
+    tokens_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    # Relationships
+    target: Mapped["Target"] = relationship(
+        "Target",
+        foreign_keys=[target_id],
+        back_populates="context_versions",
+    )
+    parent_version: Mapped[Optional["TargetContext"]] = relationship(
+        "TargetContext",
+        remote_side=[id],
+        foreign_keys=[parent_version_id],
+    )
+
+    @hybrid_property
+    def combined_context(self) -> str:
+        """Get combined user and agent context."""
+        parts = []
+        if self.user_context:
+            parts.append(f"## User Context\n\n{self.user_context}")
+        if self.agent_context:
+            parts.append(f"## Agent Context\n\n{self.agent_context}")
+        return "\n\n---\n\n".join(parts) if parts else ""
+
+    __table_args__ = (
+        UniqueConstraint("target_id", "version", name="uq_target_context_version"),
+        Index("ix_target_context_target_version", "target_id", "version"),
+        Index("ix_target_context_target_created", "target_id", "created_at"),
+        Index("ix_target_context_parent", "parent_version_id"),
     )
 
 
