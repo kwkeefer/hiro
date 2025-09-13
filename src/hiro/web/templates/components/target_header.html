@@ -1,0 +1,78 @@
+<!-- Target header component for HTMX updates -->
+<div class="flex items-start justify-between">
+    <div>
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
+            {{ target.title or target.host }}
+        </h1>
+        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            {{ target.protocol }}://{{ target.host }}{% if target.port %}:{{ target.port }}{% endif %}
+        </p>
+        <div class="mt-4 flex items-center space-x-4">
+            <!-- Status Display Mode -->
+            <div id="status-display" class="flex items-center space-x-4">
+                <!-- Status -->
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium
+                    {% if target.status == 'active' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
+                    {% elif target.status == 'blocked' %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200
+                    {% elif target.status == 'completed' %}bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200
+                    {% else %}bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200{% endif %}">
+                    Status: {{ (target.status.value if target.status.value else target.status)|title }}
+                </span>
+                <!-- Risk Level -->
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium
+                    {% if target.risk_level == 'critical' %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200
+                    {% elif target.risk_level == 'high' %}bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200
+                    {% elif target.risk_level == 'medium' %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200
+                    {% else %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200{% endif %}">
+                    Risk: {{ (target.risk_level.value if target.risk_level.value else target.risk_level)|title }}
+                </span>
+            </div>
+
+            <!-- Status Editor Mode (hidden by default) -->
+            <div id="status-editor" class="hidden flex items-center space-x-4">
+                <div class="flex space-x-2">
+                    <select name="status"
+                            class="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
+                            hx-patch="/api/targets/{{ target.id }}"
+                            hx-trigger="change"
+                            hx-target="#target-header"
+                            hx-swap="innerHTML"
+                            hx-on::after-request="document.getElementById('status-editor').classList.add('hidden'); document.getElementById('status-display').classList.remove('hidden');">
+                        <option value="active" {% if target.status == 'active' %}selected{% endif %}>Active</option>
+                        <option value="inactive" {% if target.status == 'inactive' %}selected{% endif %}>Inactive</option>
+                        <option value="blocked" {% if target.status == 'blocked' %}selected{% endif %}>Blocked</option>
+                        <option value="completed" {% if target.status == 'completed' %}selected{% endif %}>Completed</option>
+                    </select>
+
+                    <select name="risk_level"
+                            class="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
+                            hx-patch="/api/targets/{{ target.id }}"
+                            hx-trigger="change"
+                            hx-target="#target-header"
+                            hx-swap="innerHTML"
+                            hx-on::after-request="document.getElementById('status-editor').classList.add('hidden'); document.getElementById('status-display').classList.remove('hidden');">
+                        <option value="low" {% if target.risk_level == 'low' %}selected{% endif %}>Low</option>
+                        <option value="medium" {% if target.risk_level == 'medium' %}selected{% endif %}>Medium</option>
+                        <option value="high" {% if target.risk_level == 'high' %}selected{% endif %}>High</option>
+                        <option value="critical" {% if target.risk_level == 'critical' %}selected{% endif %}>Critical</option>
+                    </select>
+
+                    <button type="button"
+                            onclick="editTargetStatus()"
+                            class="px-2 py-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="flex space-x-2">
+        <button onclick="editTargetStatus()"
+                class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
+            Edit Status
+        </button>
+        <a href="/targets" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 text-sm">
+            Back to List
+        </a>
+    </div>
+</div>

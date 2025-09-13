@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block title %}Error - Hiro{% endblock %}
+
+{% block content %}
+<div class="min-h-screen flex items-center justify-center px-4">
+    <div class="text-center">
+        <h1 class="text-6xl font-bold text-gray-900 dark:text-white mb-4">
+            {% if status_code %}{{ status_code }}{% else %}Error{% endif %}
+        </h1>
+        <p class="text-xl text-gray-600 dark:text-gray-400 mb-8">
+            {{ message or "Something went wrong" }}
+        </p>
+        <a href="/targets" class="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+            Back to Targets
+        </a>
+    </div>
+</div>
+{% endblock %}

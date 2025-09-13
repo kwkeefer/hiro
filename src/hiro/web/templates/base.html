@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Hiro Web{% endblock %}</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        // Configure Tailwind for dark mode with class strategy
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {}
+            }
+        }
+    </script>
+
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+
+    <!-- Prism.js for syntax highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-markdown.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-http.min.js"></script>
+
+    <!-- Custom styles -->
+    <style>
+        .htmx-indicator {
+            display: none;
+        }
+        .htmx-request .htmx-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .htmx-request.htmx-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+    </style>
+</head>
+<body class="h-full bg-gray-50 dark:bg-gray-900">
+    <!-- Loading indicator -->
+    <div id="loading-indicator" class="htmx-indicator fixed inset-0 bg-black bg-opacity-25 z-50">
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-xl">
+            <svg class="animate-spin h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+            </svg>
+        </div>
+    </div>
+
+    <!-- Toast container -->
+    <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+    <!-- Navigation -->
+    <nav class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex">
+                    <div class="flex-shrink-0 flex items-center">
+                        <h1 class="text-xl font-bold text-gray-900 dark:text-white">Hiro</h1>
+                    </div>
+                    <div class="hidden sm:ml-6 sm:flex sm:space-x-8">
+                        <a href="/targets" class="border-indigo-500 text-gray-900 dark:text-white inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                            Targets
+                        </a>
+                    </div>
+                </div>
+                <div class="flex items-center">
+                    <button onclick="toggleDarkMode()" class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                        </svg>
+                    </button>
+                    <button onclick="showKeyboardHelp()" class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+                        <span class="text-sm">?</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main content -->
+    <main class="flex-1">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Keyboard shortcuts modal -->
+    <div id="shortcuts-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md">
+            <h2 class="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Keyboard Shortcuts</h2>
+            <dl class="space-y-2 text-sm">
+                <div class="flex justify-between">
+                    <dt class="text-gray-600 dark:text-gray-400">Show this help</dt>
+                    <dd class="font-mono text-gray-900 dark:text-white">?</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-gray-600 dark:text-gray-400">Search/Filter</dt>
+                    <dd class="font-mono text-gray-900 dark:text-white">f or /</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-gray-600 dark:text-gray-400">New target</dt>
+                    <dd class="font-mono text-gray-900 dark:text-white">n</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-gray-600 dark:text-gray-400">Navigate up/down</dt>
+                    <dd class="font-mono text-gray-900 dark:text-white">j/k</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-gray-600 dark:text-gray-400">Open selected</dt>
+                    <dd class="font-mono text-gray-900 dark:text-white">Enter</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-gray-600 dark:text-gray-400">Close/Cancel</dt>
+                    <dd class="font-mono text-gray-900 dark:text-white">Esc</dd>
+                </div>
+            </dl>
+            <button onclick="document.getElementById('shortcuts-modal').classList.add('hidden')" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                Close
+            </button>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script>
+        // Toast notifications
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            if (!container) {
+                console.warn('Toast container not found');
+                return;
+            }
+            const toast = document.createElement('div');
+            toast.className = `p-4 rounded-lg shadow-lg text-white ${
+                type === 'error' ? 'bg-red-600' :
+                type === 'success' ? 'bg-green-600' : 'bg-blue-600'
+            }`;
+            toast.textContent = message;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 5000);
+        }
+
+        // HTMX error handling
+        document.body.addEventListener('htmx:responseError', (evt) => {
+            showToast('Operation failed. Please try again.', 'error');
+        });
+
+        document.body.addEventListener('htmx:afterRequest', (evt) => {
+            if (evt.detail.successful) {
+                const trigger = evt.detail.elt;
+                if (trigger.dataset.successMessage) {
+                    showToast(trigger.dataset.successMessage, 'success');
+                }
+            }
+        });
+
+        // Dark mode toggle
+        function toggleDarkMode() {
+            const isDark = document.documentElement.classList.toggle('dark');
+            localStorage.setItem('darkMode', isDark ? 'true' : 'false');
+            console.log('Dark mode:', isDark ? 'enabled' : 'disabled');
+        }
+
+        // Initialize dark mode on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            const savedMode = localStorage.getItem('darkMode');
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+            if (savedMode === 'true' || (savedMode === null && prefersDark)) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        });
+
+        // Also initialize immediately in case DOM is already loaded
+        if (document.readyState === 'complete' || document.readyState === 'interactive') {
+            const savedMode = localStorage.getItem('darkMode');
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+            if (savedMode === 'true' || (savedMode === null && prefersDark)) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        }
+
+        // Modal helpers
+        function showKeyboardHelp() {
+            const modal = document.getElementById('shortcuts-modal');
+            if (modal) {
+                modal.classList.remove('hidden');
+            } else {
+                // Create modal if it doesn't exist
+                createKeyboardHelpModal();
+                showModal('keyboard-help-modal');
+            }
+        }
+
+        // Create keyboard help modal
+        function createKeyboardHelpModal() {
+            const modalHTML = `
+                <div id="keyboard-help-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+                    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white dark:bg-gray-800">
+                        <div class="mt-3">
+                            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100 dark:bg-blue-900">
+                                <span class="text-2xl">⌨️</span>
+                            </div>
+                            <div class="mt-3 text-center">
+                                <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white">Keyboard Shortcuts</h3>
+                                <div class="mt-4 text-left">
+                                    <div class="space-y-2 text-sm text-gray-600 dark:text-gray-300">
+                                        <div class="flex justify-between">
+                                            <span class="font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">?</span>
+                                            <span>Show this help</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">j/k</span>
+                                            <span>Navigate up/down</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">Enter</span>
+                                            <span>Open selected target</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">/</span>
+                                            <span>Focus search</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">Esc</span>
+                                            <span>Clear search</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">n</span>
+                                            <span>New target</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="items-center px-4 py-3">
+                                    <button id="keyboard-help-close" class="px-4 py-2 bg-blue-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300">
+                                        Close
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+            // Add close functionality
+            document.getElementById('keyboard-help-close').addEventListener('click', function() {
+                document.getElementById('keyboard-help-modal').remove();
+            });
+
+            // Close on escape or click outside
+            document.getElementById('keyboard-help-modal').addEventListener('click', function(e) {
+                if (e.target.id === 'keyboard-help-modal') {
+                    this.remove();
+                }
+            });
+        }
+
+        // Helper function to show modal
+        function showModal(modalId) {
+            const modal = document.getElementById(modalId);
+            if (modal) {
+                modal.classList.remove('hidden');
+            }
+        }
+
+        // Show new target modal
+        function showNewTargetModal() {
+            // For now, show a simple note that targets are created via MCP tools
+            const modalHTML = `
+                <div id="new-target-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+                    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white dark:bg-gray-800">
+                        <div class="mt-3">
+                            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100 dark:bg-blue-900">
+                                <span class="text-2xl">🎯</span>
+                            </div>
+                            <div class="mt-3 text-center">
+                                <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white">Create New Target</h3>
+                                <div class="mt-4 text-sm text-gray-600 dark:text-gray-300">
+                                    <p class="mb-3">Targets are created automatically when you make HTTP requests using the MCP tools.</p>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">
+                                        Use Claude with the hiro MCP server to start logging HTTP requests and creating targets.
+                                    </p>
+                                </div>
+                                <div class="items-center px-4 py-3">
+                                    <button id="new-target-close" class="px-4 py-2 bg-blue-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300">
+                                        Got it
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+            // Add close functionality
+            document.getElementById('new-target-close').addEventListener('click', function() {
+                document.getElementById('new-target-modal').remove();
+            });
+
+            // Close on escape or click outside
+            document.getElementById('new-target-modal').addEventListener('click', function(e) {
+                if (e.target.id === 'new-target-modal') {
+                    this.remove();
+                }
+            });
+        }
+
+        // Keyboard navigation
+        class KeyboardNavigation {
+            constructor() {
+                this.selectedIndex = -1;
+                this.setupShortcuts();
+            }
+
+            setupShortcuts() {
+                document.addEventListener('keydown', (e) => {
+                    // Don't interfere with input fields
+                    if (e.target.matches('input, textarea, select')) {
+                        if (e.key === 'Escape') {
+                            e.target.blur();
+                        }
+                        return;
+                    }
+
+                    // Global shortcuts
+                    switch(e.key) {
+                        case '?':
+                            if (e.shiftKey) {
+                                e.preventDefault();
+                                showKeyboardHelp();
+                            }
+                            break;
+                        case 'f':
+                        case '/':
+                            e.preventDefault();
+                            const searchInput = document.querySelector('[data-search-input]');
+                            if (searchInput) searchInput.focus();
+                            break;
+                        case 'n':
+                            e.preventDefault();
+                            showNewTargetModal();
+                            break;
+                        case 'j':
+                            e.preventDefault();
+                            this.navigateTargets(1);
+                            break;
+                        case 'k':
+                            e.preventDefault();
+                            this.navigateTargets(-1);
+                            break;
+                        case 'Enter':
+                            if (this.selectedIndex >= 0) {
+                                e.preventDefault();
+                                this.openSelectedTarget();
+                            }
+                            break;
+                        case 'Escape':
+                            e.preventDefault();
+                            // Close shortcuts modal if open
+                            const modal = document.getElementById('shortcuts-modal');
+                            if (modal) modal.classList.add('hidden');
+                            break;
+                    }
+                });
+            }
+
+            navigateTargets(direction) {
+                const targets = document.querySelectorAll('[data-target-card]');
+                if (targets.length === 0) return;
+
+                this.selectedIndex = Math.max(0, Math.min(targets.length - 1, this.selectedIndex + direction));
+                targets.forEach((t, i) => {
+                    t.classList.toggle('ring-2', i === this.selectedIndex);
+                    t.classList.toggle('ring-blue-500', i === this.selectedIndex);
+                });
+            }
+
+            openSelectedTarget() {
+                const targets = document.querySelectorAll('[data-target-card]');
+                if (targets[this.selectedIndex]) {
+                    const link = targets[this.selectedIndex].querySelector('a[href^="/targets/"]');
+                    if (link) window.location.href = link.href;
+                }
+            }
+        }
+
+        // Initialize keyboard navigation
+        document.addEventListener('DOMContentLoaded', () => {
+            new KeyboardNavigation();
+        });
+    </script>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

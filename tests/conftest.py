@@ -3,8 +3,11 @@
 import os
 import sys
 from pathlib import Path
+from unittest.mock import MagicMock
+from uuid import uuid4
 
 import pytest
+from fastapi.testclient import TestClient
 
 # Add src to path for testing
 src_path = Path(__file__).parent.parent / "src"
@@ -43,3 +46,50 @@ def temp_file(tmp_path):
     file_path = tmp_path / "test_file.txt"
     file_path.write_text("test content")
     return file_path
+
+
+@pytest.fixture
+def test_client():
+    """Create a test client for the FastAPI app."""
+    from hiro.web.app import app
+
+    return TestClient(app)
+
+
+@pytest.fixture
+def mock_target():
+    """Create a mock target for testing."""
+    target = MagicMock()
+    target.id = uuid4()
+    target.host = "test.example.com"
+    target.protocol = "https"
+    target.status = "active"
+    target.risk_level = "medium"
+    target.port = None
+    target.title = "Test Target"
+    target.notes = []
+    target.requests = []
+    target.created_at = "2025-01-01T00:00:00Z"
+    target.updated_at = "2025-01-01T00:00:00Z"
+    target.to_dict = lambda: {
+        "id": str(target.id),
+        "host": target.host,
+        "protocol": target.protocol,
+        "status": target.status,
+        "risk_level": target.risk_level,
+        "port": target.port,
+        "title": target.title,
+        "notes": [],
+        "requests": [],
+    }
+    return target
+
+
+@pytest.fixture
+def db_session():
+    """Create a mock database session."""
+    session = MagicMock()
+    session.commit = MagicMock()
+    session.rollback = MagicMock()
+    session.close = MagicMock()
+    return session

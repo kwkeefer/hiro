@@ -1,0 +1,894 @@
+{% extends "base.html" %}
+
+{% block title %}{{ target.title or target.host }} - Hiro{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Header -->
+    <div id="target-header" class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
+        <div class="flex items-start justify-between">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
+                    {{ target.title or target.host }}
+                </h1>
+                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    {{ target.protocol }}://{{ target.host }}{% if target.port %}:{{ target.port }}{% endif %}
+                </p>
+                <div class="mt-4 flex items-center space-x-4">
+                    <!-- Status Display Mode -->
+                    <div id="status-display" class="flex items-center space-x-4">
+                        <!-- Status -->
+                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium
+                            {% if target.status == 'active' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
+                            {% elif target.status == 'blocked' %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200
+                            {% elif target.status == 'completed' %}bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200
+                            {% else %}bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200{% endif %}">
+                            Status: {{ (target.status.value if target.status.value else target.status)|title }}
+                        </span>
+                        <!-- Risk Level -->
+                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium
+                            {% if target.risk_level == 'critical' %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200
+                            {% elif target.risk_level == 'high' %}bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200
+                            {% elif target.risk_level == 'medium' %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200
+                            {% else %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200{% endif %}">
+                            Risk: {{ (target.risk_level.value if target.risk_level.value else target.risk_level)|title }}
+                        </span>
+                    </div>
+
+                    <!-- Status Editor Mode (hidden by default) -->
+                    <div id="status-editor" class="hidden flex items-center space-x-4">
+                        <div class="flex space-x-2">
+                            <select name="status"
+                                    class="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
+                                    hx-patch="/api/targets/{{ target.id }}"
+                                    hx-trigger="change"
+                                    hx-target="#target-header"
+                                    hx-swap="innerHTML"
+                                    hx-on::after-request="document.getElementById('status-editor').classList.add('hidden'); document.getElementById('status-display').classList.remove('hidden');">
+                                <option value="active" {% if target.status == 'active' %}selected{% endif %}>Active</option>
+                                <option value="inactive" {% if target.status == 'inactive' %}selected{% endif %}>Inactive</option>
+                                <option value="blocked" {% if target.status == 'blocked' %}selected{% endif %}>Blocked</option>
+                                <option value="completed" {% if target.status == 'completed' %}selected{% endif %}>Completed</option>
+                            </select>
+
+                            <select name="risk_level"
+                                    class="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
+                                    hx-patch="/api/targets/{{ target.id }}"
+                                    hx-trigger="change"
+                                    hx-target="#target-header"
+                                    hx-swap="innerHTML"
+                                    hx-on::after-request="document.getElementById('status-editor').classList.add('hidden'); document.getElementById('status-display').classList.remove('hidden');">
+                                <option value="low" {% if target.risk_level == 'low' %}selected{% endif %}>Low</option>
+                                <option value="medium" {% if target.risk_level == 'medium' %}selected{% endif %}>Medium</option>
+                                <option value="high" {% if target.risk_level == 'high' %}selected{% endif %}>High</option>
+                                <option value="critical" {% if target.risk_level == 'critical' %}selected{% endif %}>Critical</option>
+                            </select>
+
+                            <button type="button"
+                                    onclick="editTargetStatus()"
+                                    class="px-2 py-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="flex space-x-2">
+                <button onclick="editTargetStatus()"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
+                    Edit Status
+                </button>
+                <a href="/targets" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 text-sm">
+                    Back to List
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+        <div class="border-b border-gray-200 dark:border-gray-700">
+            <nav class="-mb-px flex space-x-8 px-6" aria-label="Tabs">
+                <a href="?tab=overview"
+                   class="{% if current_tab == 'overview' %}border-blue-500 text-blue-600 dark:text-blue-400{% else %}border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300{% endif %} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                    Overview
+                </a>
+                <a href="?tab=context"
+                   class="{% if current_tab == 'context' %}border-blue-500 text-blue-600 dark:text-blue-400{% else %}border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300{% endif %} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                    Context
+                    {% if target.current_context %}
+                        <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
+                            v{{ target.current_context.version }}
+                        </span>
+                    {% endif %}
+                </a>
+                <a href="?tab=requests"
+                   class="{% if current_tab == 'requests' %}border-blue-500 text-blue-600 dark:text-blue-400{% else %}border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300{% endif %} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                    HTTP Requests
+                    {% if requests %}
+                        <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
+                            {{ requests|length }}
+                        </span>
+                    {% endif %}
+                </a>
+                <a href="?tab=notes"
+                   class="{% if current_tab == 'notes' %}border-blue-500 text-blue-600 dark:text-blue-400{% else %}border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300{% endif %} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                    Notes
+                    {% if target.notes %}
+                        <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
+                            {{ target.notes|length }}
+                        </span>
+                    {% endif %}
+                </a>
+            </nav>
+        </div>
+
+        <!-- Tab Content -->
+        <div class="p-6">
+            {% if current_tab == 'overview' %}
+                <!-- Overview Tab -->
+                <div class="space-y-6">
+                    <div>
+                        <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Target Information</h3>
+                        <dl class="grid grid-cols-1 gap-x-4 gap-y-4 sm:grid-cols-2">
+                            <div>
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Host</dt>
+                                <dd class="mt-1 text-sm text-gray-900 dark:text-white">{{ target.host }}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Port</dt>
+                                <dd class="mt-1 text-sm text-gray-900 dark:text-white">{{ target.port or 'Default' }}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Protocol</dt>
+                                <dd class="mt-1 text-sm text-gray-900 dark:text-white">{{ target.protocol|upper }}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Discovery Date</dt>
+                                <dd class="mt-1 text-sm text-gray-900 dark:text-white">{{ target.discovery_date.strftime('%Y-%m-%d %H:%M') }}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Last Activity</dt>
+                                <dd class="mt-1 text-sm text-gray-900 dark:text-white">{{ target.last_activity.strftime('%Y-%m-%d %H:%M') }}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Target ID</dt>
+                                <dd class="mt-1 text-sm text-gray-900 dark:text-white font-mono">{{ target.id }}</dd>
+                            </div>
+                        </dl>
+                    </div>
+
+                    {% if target.extra_data %}
+                    <div>
+                        <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Additional Data</h3>
+                        <pre class="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg overflow-x-auto text-sm">{{ target.extra_data|tojson(indent=2) }}</pre>
+                    </div>
+                    {% endif %}
+                </div>
+
+            {% elif current_tab == 'context' %}
+                <!-- Context Tab -->
+                <div class="space-y-6">
+                    <!-- Version History Section -->
+                    <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-lg font-medium text-gray-900 dark:text-white">Version History</h3>
+                            <button id="toggle-history-btn"
+                                    onclick="toggleVersionHistory()"
+                                    class="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400">
+                                Show History
+                            </button>
+                        </div>
+
+                        <!-- Version History List (Hidden by default) -->
+                        <div id="version-history" class="hidden">
+                            <div id="history-loading" class="text-center py-4">
+                                <div class="inline-flex items-center">
+                                    <svg class="animate-spin -ml-1 mr-3 h-4 w-4 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    Loading version history...
+                                </div>
+                            </div>
+                            <div id="history-content" class="hidden space-y-2"></div>
+                        </div>
+
+                        <!-- Current Version Indicator -->
+                        <div id="current-version-indicator" class="flex items-center justify-between text-sm">
+                            {% if context %}
+                            <span class="text-gray-700 dark:text-gray-300">
+                                <span class="font-medium">Current:</span> Version {{ context.version }}
+                                {% if context.change_summary %}
+                                    - {{ context.change_summary }}
+                                {% endif %}
+                            </span>
+                            <span class="text-gray-500 dark:text-gray-400">
+                                {{ context.created_at.strftime('%Y-%m-%d %H:%M') }} by {{ context.created_by }}
+                            </span>
+                            {% else %}
+                            <span class="text-gray-500 dark:text-gray-400 italic">No context versions yet</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Context Editor -->
+                    <div id="context-editor">
+                        <!-- Version Navigation Bar -->
+                        <div id="version-navigation" class="hidden bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center space-x-4">
+                                    <span class="text-sm font-medium text-blue-800 dark:text-blue-200">
+                                        Viewing Version <span id="viewing-version">1</span>
+                                    </span>
+                                    <span class="text-sm text-blue-600 dark:text-blue-300" id="version-metadata">
+                                        <!-- Populated by JavaScript -->
+                                    </span>
+                                </div>
+                                <div class="flex items-center space-x-2">
+                                    <button onclick="loadCurrentVersion()"
+                                            class="px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                                        Back to Current
+                                    </button>
+                                    <button onclick="hideVersionNavigation()"
+                                            class="px-3 py-1 text-sm bg-gray-500 text-white rounded-md hover:bg-gray-600">
+                                        Close
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <!-- User Context -->
+                            <div>
+                                <div class="flex items-center justify-between mb-4">
+                                    <h3 class="text-lg font-medium text-gray-900 dark:text-white">User Context</h3>
+                                    <button onclick="togglePreview('user')" class="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400">
+                                        Preview
+                                    </button>
+                                </div>
+                                <div class="relative">
+                                    <textarea id="user_context"
+                                              name="user_context"
+                                              rows="20"
+                                              class="w-full p-4 border border-gray-300 dark:border-gray-600 rounded-lg font-mono text-sm dark:bg-gray-900 dark:text-white"
+                                              placeholder="Enter user context in markdown..."
+                                              data-context-type="user"
+                                              oninput="markContextModified()">{{ context.user_context if context else '' }}</textarea>
+                                </div>
+                            </div>
+
+                            <!-- Agent Context -->
+                            <div>
+                                <div class="flex items-center justify-between mb-4">
+                                    <h3 class="text-lg font-medium text-gray-900 dark:text-white">Agent Context</h3>
+                                    <button onclick="togglePreview('agent')" class="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400">
+                                        Preview
+                                    </button>
+                                </div>
+                                <div class="relative">
+                                    <textarea id="agent_context"
+                                              name="agent_context"
+                                              rows="20"
+                                              class="w-full p-4 border border-gray-300 dark:border-gray-600 rounded-lg font-mono text-sm dark:bg-gray-900 dark:text-white"
+                                              placeholder="Agent context will appear here..."
+                                              data-context-type="agent"
+                                              oninput="markContextModified()">{{ context.agent_context if context else '' }}</textarea>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Save Button (only shown when editing current version) -->
+                        <div id="save-section" class="flex justify-end mt-6 space-x-3">
+                            <div id="save-status" class="hidden flex items-center space-x-2 text-sm">
+                                <span class="text-gray-500">Changes saved</span>
+                                <svg class="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                                </svg>
+                            </div>
+                            <button id="save-context-btn"
+                                    onclick="saveContext('{{ target.id }}')"
+                                    disabled
+                                    class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
+                                Save Changes
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+            {% elif current_tab == 'requests' %}
+                <!-- HTTP Requests Tab -->
+                <div>
+                    {% if requests %}
+                    <div class="space-y-4">
+                        {% for request in requests %}
+                        <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-900">
+                            <div class="flex items-start justify-between">
+                                <div class="flex-1">
+                                    <div class="flex items-center space-x-2 mb-2">
+                                        <span class="px-2 py-1 text-xs font-medium rounded
+                                            {% if request.method == 'GET' %}bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200
+                                            {% elif request.method == 'POST' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
+                                            {% elif request.method == 'PUT' %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200
+                                            {% elif request.method == 'DELETE' %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200
+                                            {% else %}bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200{% endif %}">
+                                            {{ request.method }}
+                                        </span>
+                                        <span class="text-sm font-mono text-gray-900 dark:text-white">{{ request.path }}</span>
+                                        {% if request.status_code %}
+                                        <span class="px-2 py-1 text-xs font-medium rounded
+                                            {% if request.status_code >= 200 and request.status_code < 300 %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
+                                            {% elif request.status_code >= 400 %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200
+                                            {% else %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200{% endif %}">
+                                            {{ request.status_code }}
+                                        </span>
+                                        {% endif %}
+                                    </div>
+                                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                                        {{ request.created_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                                        {% if request.elapsed_ms %}
+                                            • {{ request.elapsed_ms|round(2) }}ms
+                                        {% endif %}
+                                    </p>
+                                </div>
+                                <button onclick="toggleRequestDetails('{{ request.id }}')" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 text-sm">
+                                    Details
+                                </button>
+                            </div>
+
+                            <!-- Expandable details -->
+                            <div id="request-{{ request.id }}" class="hidden mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                                <div class="space-y-4">
+                                    {% if request.headers %}
+                                    <div>
+                                        <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-2">Request Headers</h4>
+                                        <pre class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 p-3 rounded text-xs overflow-x-auto"><code class="language-http text-gray-900 dark:text-gray-100">{{ request.headers|tojson(indent=2) }}</code></pre>
+                                    </div>
+                                    {% endif %}
+
+                                    {% if request.request_body %}
+                                    <div>
+                                        <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-2">Request Body</h4>
+                                        <pre class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 p-3 rounded text-xs overflow-x-auto"><code class="text-gray-900 dark:text-gray-100">{{ request.request_body }}</code></pre>
+                                    </div>
+                                    {% endif %}
+
+                                    {% if request.response_body %}
+                                    <div>
+                                        <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-2">Response Body</h4>
+                                        <pre class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 p-3 rounded text-xs overflow-x-auto"><code class="text-gray-900 dark:text-gray-100">{{ request.response_body[:1000] }}{% if request.response_body|length > 1000 %}... (truncated){% endif %}</code></pre>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <!-- Empty state -->
+                    <div class="text-center py-12">
+                        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M8 12h.01M12 12h.01M16 12h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-white">No HTTP requests yet</h3>
+                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                            HTTP requests made to this target will appear here.
+                        </p>
+                    </div>
+                    {% endif %}
+                </div>
+
+            {% elif current_tab == 'notes' %}
+                <!-- Notes Tab -->
+                <div>
+                    {% if target.notes %}
+                    <div class="space-y-4">
+                        {% for note in target.notes %}
+                        <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                            <div class="flex items-start justify-between mb-2">
+                                <h4 class="text-sm font-medium text-gray-900 dark:text-white">{{ note.title }}</h4>
+                                <span class="px-2 py-1 text-xs font-medium rounded bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
+                                    {{ note.note_type }}
+                                </span>
+                            </div>
+                            <p class="text-sm text-gray-700 dark:text-gray-300">{{ note.content }}</p>
+                            <div class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                {{ note.created_at.strftime('%Y-%m-%d %H:%M') }}
+                                {% if note.tags %}
+                                    • Tags: {{ ', '.join(note.tags) }}
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <!-- Empty state -->
+                    <div class="text-center py-12">
+                        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-white">No notes yet</h3>
+                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                            Notes about this target will appear here.
+                        </p>
+                    </div>
+                    {% endif %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Track if context has been modified
+    let contextModified = false;
+    let originalUserContext = '';
+    let originalAgentContext = '';
+    let currentVersion = {{ context.version if context else 'null' }};
+    let isViewingHistoricalVersion = false;
+    let versionHistory = [];
+
+    // Store original values on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        const userTextarea = document.getElementById('user_context');
+        const agentTextarea = document.getElementById('agent_context');
+        if (userTextarea) originalUserContext = userTextarea.value;
+        if (agentTextarea) originalAgentContext = agentTextarea.value;
+    });
+
+    function markContextModified() {
+        // Don't allow modifications when viewing historical versions
+        if (isViewingHistoricalVersion) {
+            return;
+        }
+
+        const userTextarea = document.getElementById('user_context');
+        const agentTextarea = document.getElementById('agent_context');
+        const saveBtn = document.getElementById('save-context-btn');
+
+        // Check if content has actually changed
+        const hasChanges = (userTextarea && userTextarea.value !== originalUserContext) ||
+                          (agentTextarea && agentTextarea.value !== originalAgentContext);
+
+        if (hasChanges) {
+            contextModified = true;
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Save Changes';
+            }
+        } else {
+            contextModified = false;
+            if (saveBtn) {
+                saveBtn.disabled = true;
+                saveBtn.textContent = 'Save Changes';
+            }
+        }
+    }
+
+    // Version history functions
+    async function toggleVersionHistory() {
+        const historyDiv = document.getElementById('version-history');
+        const toggleBtn = document.getElementById('toggle-history-btn');
+
+        if (historyDiv.classList.contains('hidden')) {
+            // Show history
+            historyDiv.classList.remove('hidden');
+            toggleBtn.textContent = 'Hide History';
+            await loadVersionHistory();
+        } else {
+            // Hide history
+            historyDiv.classList.add('hidden');
+            toggleBtn.textContent = 'Show History';
+        }
+    }
+
+    async function loadVersionHistory() {
+        const targetId = '{{ target.id }}';
+        const loadingDiv = document.getElementById('history-loading');
+        const contentDiv = document.getElementById('history-content');
+
+        // Show loading state
+        loadingDiv.classList.remove('hidden');
+        contentDiv.classList.add('hidden');
+
+        try {
+            const response = await fetch(`/api/targets/${targetId}/context/history`);
+            if (!response.ok) {
+                throw new Error('Failed to load version history');
+            }
+
+            const data = await response.json();
+            versionHistory = data.history;
+
+            // Populate history list
+            contentDiv.innerHTML = '';
+
+            if (versionHistory.length === 0) {
+                contentDiv.innerHTML = '<p class="text-gray-500 dark:text-gray-400 text-sm italic">No version history available.</p>';
+            } else {
+                versionHistory.forEach(version => {
+                    const versionDiv = document.createElement('div');
+                    versionDiv.className = 'flex items-center justify-between p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-750 cursor-pointer';
+                    versionDiv.onclick = () => loadVersionContent(version.version);
+
+                    const isCurrentVersion = version.version === currentVersion;
+                    const changeTypeColor = getChangeTypeColor(version.change_type);
+
+                    versionDiv.innerHTML = `
+                        <div class="flex-1">
+                            <div class="flex items-center space-x-2 mb-1">
+                                <span class="font-medium text-gray-900 dark:text-white">
+                                    Version ${version.version}
+                                    ${isCurrentVersion ? '<span class="text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 px-2 py-0.5 rounded-full ml-2">Current</span>' : ''}
+                                </span>
+                                <span class="text-xs px-2 py-0.5 rounded-full ${changeTypeColor}">
+                                    ${(version.change_type || 'unknown').replace('_', ' ')}
+                                </span>
+                                ${version.is_major_version ? '<span class="text-xs bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200 px-2 py-0.5 rounded-full">Major</span>' : ''}
+                            </div>
+                            <div class="text-sm text-gray-600 dark:text-gray-400">
+                                ${version.change_summary || 'No summary available'}
+                            </div>
+                        </div>
+                        <div class="text-right text-sm text-gray-500 dark:text-gray-400">
+                            <div>${formatDate(version.created_at)}</div>
+                            <div class="text-xs">${version.created_by}</div>
+                        </div>
+                    `;
+
+                    contentDiv.appendChild(versionDiv);
+                });
+            }
+
+            // Hide loading, show content
+            loadingDiv.classList.add('hidden');
+            contentDiv.classList.remove('hidden');
+
+        } catch (error) {
+            console.error('Error loading version history:', error);
+            loadingDiv.classList.add('hidden');
+            contentDiv.innerHTML = '<p class="text-red-500 text-sm">Failed to load version history.</p>';
+            contentDiv.classList.remove('hidden');
+        }
+    }
+
+    async function loadVersionContent(version) {
+        const targetId = '{{ target.id }}';
+
+        try {
+            const response = await fetch(`/api/targets/${targetId}/context/${version}`);
+            if (!response.ok) {
+                throw new Error('Failed to load version content');
+            }
+
+            const versionData = await response.json();
+
+            // Update textareas with version content
+            const userTextarea = document.getElementById('user_context');
+            const agentTextarea = document.getElementById('agent_context');
+
+            userTextarea.value = versionData.user_context || '';
+            agentTextarea.value = versionData.agent_context || '';
+
+            // Make textareas read-only if not current version
+            const isCurrentVersionView = version === currentVersion;
+            isViewingHistoricalVersion = !isCurrentVersionView;
+
+            userTextarea.readOnly = isViewingHistoricalVersion;
+            agentTextarea.readOnly = isViewingHistoricalVersion;
+
+            // Update visual styling
+            const readOnlyClass = 'bg-gray-100 dark:bg-gray-800';
+            if (isViewingHistoricalVersion) {
+                userTextarea.classList.add(...readOnlyClass.split(' '));
+                agentTextarea.classList.add(...readOnlyClass.split(' '));
+            } else {
+                userTextarea.classList.remove(...readOnlyClass.split(' '));
+                agentTextarea.classList.remove(...readOnlyClass.split(' '));
+            }
+
+            // Show/hide save section
+            const saveSection = document.getElementById('save-section');
+            if (isViewingHistoricalVersion) {
+                saveSection.classList.add('hidden');
+            } else {
+                saveSection.classList.remove('hidden');
+                // Update original values if viewing current version
+                originalUserContext = userTextarea.value;
+                originalAgentContext = agentTextarea.value;
+            }
+
+            // Show version navigation
+            showVersionNavigation(versionData);
+
+            showToast(`Loaded version ${version}`, 'info');
+
+        } catch (error) {
+            console.error('Error loading version content:', error);
+            showToast('Failed to load version content', 'error');
+        }
+    }
+
+    function showVersionNavigation(versionData) {
+        const navDiv = document.getElementById('version-navigation');
+        const versionSpan = document.getElementById('viewing-version');
+        const metadataSpan = document.getElementById('version-metadata');
+
+        versionSpan.textContent = versionData.version;
+        metadataSpan.textContent = `Created ${formatDate(versionData.created_at)} by ${versionData.created_by}`;
+
+        navDiv.classList.remove('hidden');
+    }
+
+    function hideVersionNavigation() {
+        const navDiv = document.getElementById('version-navigation');
+        navDiv.classList.add('hidden');
+    }
+
+    function loadCurrentVersion() {
+        if (currentVersion) {
+            loadVersionContent(currentVersion);
+        } else {
+            // No current version, clear textareas
+            const userTextarea = document.getElementById('user_context');
+            const agentTextarea = document.getElementById('agent_context');
+
+            userTextarea.value = '';
+            agentTextarea.value = '';
+            userTextarea.readOnly = false;
+            agentTextarea.readOnly = false;
+
+            isViewingHistoricalVersion = false;
+
+            // Remove read-only styling
+            const readOnlyClass = 'bg-gray-100 dark:bg-gray-800';
+            userTextarea.classList.remove(...readOnlyClass.split(' '));
+            agentTextarea.classList.remove(...readOnlyClass.split(' '));
+
+            // Show save section
+            const saveSection = document.getElementById('save-section');
+            saveSection.classList.remove('hidden');
+
+            hideVersionNavigation();
+            showToast('Ready to create first version', 'info');
+        }
+    }
+
+    function getChangeTypeColor(changeType) {
+        switch (changeType) {
+            case 'user_edit':
+                return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
+            case 'agent_update':
+                return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+            case 'initial':
+                return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
+            case 'rollback':
+                return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200';
+            default:
+                return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
+        }
+    }
+
+    function formatDate(isoString) {
+        const date = new Date(isoString);
+        return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    }
+
+    async function saveContext(targetId) {
+        const userTextarea = document.getElementById('user_context');
+        const agentTextarea = document.getElementById('agent_context');
+        const saveBtn = document.getElementById('save-context-btn');
+        const saveStatus = document.getElementById('save-status');
+
+        if (!userTextarea || !agentTextarea) {
+            console.error('Context textareas not found');
+            return;
+        }
+
+        // Disable button and show saving state
+        if (saveBtn) {
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Saving...';
+        }
+
+        const contextData = {
+            user_context: userTextarea.value || null,
+            agent_context: agentTextarea.value || null
+        };
+
+        try {
+            const response = await fetch(`/api/targets/${targetId}/context`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(contextData)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                console.error('Failed to save context:', errorData);
+                showToast('Failed to save context', 'error');
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                    saveBtn.textContent = 'Save Changes';
+                }
+                return;
+            }
+
+            const result = await response.json();
+            console.log('Context saved successfully:', result);
+
+            // Update original values
+            originalUserContext = userTextarea.value;
+            originalAgentContext = agentTextarea.value;
+            contextModified = false;
+
+            // Show success status
+            if (saveStatus) {
+                saveStatus.classList.remove('hidden');
+                setTimeout(() => {
+                    saveStatus.classList.add('hidden');
+                }, 3000);
+            }
+
+            // Reset button state
+            if (saveBtn) {
+                saveBtn.disabled = true;
+                saveBtn.textContent = 'Save Changes';
+            }
+
+            // Show version in toast if available
+            const versionText = result.version ? ` (v${result.version})` : '';
+            showToast(`Context saved successfully${versionText}`, 'success');
+
+            // Update current version number
+            if (result.version) {
+                currentVersion = result.version;
+            }
+
+            // Refresh version history if it's currently displayed
+            const historyDiv = document.getElementById('version-history');
+            if (!historyDiv.classList.contains('hidden')) {
+                await loadVersionHistory();
+            }
+
+        } catch (error) {
+            console.error('Error saving context:', error);
+            showToast('Error saving context', 'error');
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Save Changes';
+            }
+        }
+    }
+
+    // Toggle request details
+    function toggleRequestDetails(requestId) {
+        const details = document.getElementById(`request-${requestId}`);
+        details.classList.toggle('hidden');
+    }
+
+    // Toggle markdown preview
+    function togglePreview(type) {
+        const textareaId = type === 'user' ? 'user_context' : 'agent_context';
+        const previewId = `${type}-preview`;
+
+        const textarea = document.getElementById(textareaId);
+        let preview = document.getElementById(previewId);
+
+        if (!textarea) return;
+
+        // If preview doesn't exist, create it
+        if (!preview) {
+            preview = document.createElement('div');
+            preview.id = previewId;
+            preview.className = 'w-full p-4 border border-gray-300 dark:border-gray-600 rounded-lg prose dark:prose-invert max-w-none dark:bg-gray-900';
+            preview.style.display = 'none';
+            textarea.parentNode.insertBefore(preview, textarea.nextSibling);
+        }
+
+        // Toggle visibility
+        if (preview.style.display === 'none') {
+            // Show preview
+            const markdownText = textarea.value || 'No content to preview';
+
+            // Simple markdown-like rendering (basic implementation)
+            let html = markdownText
+                .replace(/^### (.*$)/gm, '<h3>$1</h3>')
+                .replace(/^## (.*$)/gm, '<h2>$1</h2>')
+                .replace(/^# (.*$)/gm, '<h1>$1</h1>')
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/`(.*?)`/g, '<code>$1</code>')
+                .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
+                .replace(/\n/g, '<br>');
+
+            preview.innerHTML = html || '<em class="text-gray-500">No content to preview</em>';
+            preview.style.display = 'block';
+            textarea.style.display = 'none';
+
+            // Update button text
+            const button = event.target;
+            button.textContent = 'Edit';
+        } else {
+            // Show textarea
+            preview.style.display = 'none';
+            textarea.style.display = 'block';
+
+            // Update button text
+            const button = event.target;
+            button.textContent = 'Preview';
+        }
+    }
+
+    // Edit target status - toggle inline editor
+    function editTargetStatus() {
+        const statusEditor = document.getElementById('status-editor');
+        const statusDisplay = document.getElementById('status-display');
+
+        if (statusEditor) {
+            // Toggle visibility
+            statusEditor.classList.toggle('hidden');
+            statusDisplay.classList.toggle('hidden');
+
+            // Focus on status select if editor is shown
+            if (!statusEditor.classList.contains('hidden')) {
+                const select = statusEditor.querySelector('select[name="status"]');
+                if (select) select.focus();
+            }
+        }
+    }
+
+    // Simple toast notification function
+    function showToast(message, type = 'info') {
+        // Remove any existing toast
+        const existingToast = document.getElementById('toast');
+        if (existingToast) {
+            existingToast.remove();
+        }
+
+        // Create toast element
+        const toast = document.createElement('div');
+        toast.id = 'toast';
+        toast.className = `fixed top-4 right-4 px-4 py-2 rounded-lg shadow-lg z-50 transition-all duration-300 transform translate-x-0`;
+
+        // Set color based on type
+        switch (type) {
+            case 'success':
+                toast.className += ' bg-green-500 text-white';
+                break;
+            case 'error':
+                toast.className += ' bg-red-500 text-white';
+                break;
+            case 'info':
+                toast.className += ' bg-blue-500 text-white';
+                break;
+            default:
+                toast.className += ' bg-gray-500 text-white';
+        }
+
+        toast.textContent = message;
+        document.body.appendChild(toast);
+
+        // Remove after 3 seconds
+        setTimeout(() => {
+            toast.classList.add('translate-x-full', 'opacity-0');
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.remove();
+                }
+            }, 300);
+        }, 3000);
+    }
+
+    // Highlight code blocks if Prism is loaded
+    if (typeof Prism !== 'undefined') {
+        Prism.highlightAll();
+    }
+</script>
+{% endblock %}

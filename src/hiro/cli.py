@@ -96,8 +96,42 @@ def info() -> None:
 
 @cli.command()
 @click.option("--transport", "-t", default="stdio", help="Transport type (stdio, sse)")
-def serve(transport: str) -> None:
+@click.option("--no-web", is_flag=True, help="Disable web interface")
+@click.option("--web-port", default=8001, help="Port for web interface (default: 8001)")
+def serve(transport: str, no_web: bool, web_port: int) -> None:
     """Start the MCP server."""
+    import threading
+    import time
+
+    # Start web interface in background thread if not disabled
+    if not no_web:
+
+        def run_web_server():
+            import logging
+
+            import uvicorn
+
+            # Suppress uvicorn logs to avoid cluttering MCP output
+            logging.getLogger("uvicorn").setLevel(logging.WARNING)
+            logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+
+            try:
+                uvicorn.run(
+                    "hiro.web.app:app",
+                    host="127.0.0.1",
+                    port=web_port,
+                    log_level="warning",
+                    reload=False,
+                )
+            except Exception as e:
+                click.echo(f"⚠️  Web interface failed to start: {e}", err=True)
+
+        web_thread = threading.Thread(target=run_web_server, daemon=True)
+        web_thread.start()
+
+        # Give the web server a moment to start
+        time.sleep(1)
+        click.echo(f"🌐 Web interface available at http://127.0.0.1:{web_port}/targets")
 
     def _serve() -> None:
         server = FastMcpServerAdapter("hiro-server")
@@ -141,6 +175,8 @@ def serve(transport: str) -> None:
     multiple=True,
     help="Additional HTTP headers to inject into all requests (format: key=value)",
 )
+@click.option("--no-web", is_flag=True, help="Disable web interface")
+@click.option("--web-port", default=8001, help="Port for web interface (default: 8001)")
 def serve_http(
     proxy: str | None,
     timeout: int | None,
@@ -150,6 +186,8 @@ def serve_http(
     port: int | None,
     path: str | None,
     header: tuple[str, ...],
+    no_web: bool,
+    web_port: int,
 ) -> None:
     """Start unified MCP server with HTTP and database tools.
 
@@ -173,6 +211,39 @@ def serve_http(
         hiro serve-http -H "X-Team=RedTeam" -H "Authorization=Bearer token123"
         DATABASE_URL=postgresql://... hiro serve-http  # Enables all features
     """
+
+    # Start web interface in background thread if not disabled
+    import threading
+    import time
+
+    if not no_web:
+
+        def run_web_server():
+            import logging
+
+            import uvicorn
+
+            # Suppress uvicorn logs to avoid cluttering MCP output
+            logging.getLogger("uvicorn").setLevel(logging.WARNING)
+            logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+
+            try:
+                uvicorn.run(
+                    "hiro.web.app:app",
+                    host="127.0.0.1",
+                    port=web_port,
+                    log_level="warning",
+                    reload=False,
+                )
+            except Exception as e:
+                click.echo(f"⚠️  Web interface failed to start: {e}", err=True)
+
+        web_thread = threading.Thread(target=run_web_server, daemon=True)
+        web_thread.start()
+
+        # Give the web server a moment to start
+        time.sleep(1)
+        click.echo(f"🌐 Web interface available at http://127.0.0.1:{web_port}/targets")
 
     def _serve_http() -> None:
         # Load settings from config
@@ -414,6 +485,24 @@ async def status(runner: DatabaseCommandRunner) -> None:
         click.echo(f"Current revision: {current_rev}")
     else:
         click.echo("No migrations have been run yet")
+
+
+@cli.command()
+@click.option("--host", default="127.0.0.1", help="Host to bind to")
+@click.option("--port", default=8000, help="Port to bind to")
+@click.option("--reload", is_flag=True, help="Enable auto-reload")
+def web(host: str, port: int, reload: bool) -> None:
+    """Run the web interface."""
+    click.echo(f"🌐 Starting Hiro Web Interface on http://{host}:{port}")
+
+    import uvicorn
+
+    uvicorn.run(
+        "hiro.web.app:app",
+        host=host,
+        port=port,
+        reload=reload,
+    )
 
 
 def main() -> None:

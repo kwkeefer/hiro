@@ -1,333 +1,416 @@
-# Web Overlay Implementation Plan
+# Web Overlay MVP Implementation Plan
 
 ## Overview
-Comprehensive web interface for the hiro MCP server, providing rich UI for target management, context editing, request analysis, and session tracking. This overlay complements the terminal-based MCP tools with a visual interface optimized for complex operations and data exploration.
+Minimal web interface for the hiro MCP server, providing essential UI for target management, context editing, and HTTP request viewing. This overlay complements the terminal-based MCP tools with a focused visual interface for the most common operations.
 
-## Design Philosophy
+## MVP Scope
 
-### Core Principles
-1. **Progressive Enhancement** - Terminal tools remain primary, web adds value
-2. **Real-time Sync** - Changes in web UI immediately available to MCP tools
-3. **Lightweight Stack** - Minimize JavaScript complexity, leverage server-side rendering
-4. **Keyboard-First** - Full keyboard navigation for power users
-5. **Context Switching** - Seamless movement between terminal and web
+### Core Features
+1. **Target Management** - View, create, update targets with status and risk levels
+2. **Context Editing** - Edit user and agent context with markdown syntax highlighting
+3. **HTTP Request Viewing** - Browse requests made against each target
+4. **Target Attributes** - Modify status, risk level, port, protocol, and metadata
 
-### Technology Stack
-- **Backend**: FastAPI (async, already in Python ecosystem)
-- **Frontend**: HTMX + Alpine.js (server-driven, minimal JS)
-- **Templating**: Jinja2 (Python standard)
-- **Styling**: Tailwind CSS (utility-first, dark mode support)
-- **Editor**: CodeMirror 6 (markdown editing with vim mode)
+### Out of Scope (Not MVP)
+- AI session management
+- Analytics and reporting
+- Advanced search
+- Collaboration features
+- Export functionality
+- Mobile support
+
+## Technology Stack
+
+### Backend
+- **Framework**: FastAPI (async, already in Python ecosystem)
 - **Database**: Existing PostgreSQL (shared with MCP server)
+- **Templating**: Jinja2 (Python standard)
 
-## Phase 1: Foundation & Architecture
+### Frontend
+- **UI Updates**: HTMX (server-driven, minimal JavaScript)
+- **Styling**: Tailwind CSS (utility-first, dark mode support)
+- **Markdown Editor**: CodeMirror 6 (with markdown mode)
+- **HTTP Highlighting**: Prism.js (lightweight syntax highlighting)
 
-### 1.1 Project Structure
+## Project Structure
+
 ```
 src/hiro/web/
 ├── __init__.py
 ├── app.py                      # FastAPI application
-├── config.py                   # Web-specific configuration
-├── routers/                    # API and view routers
+├── routers/                    # Route handlers
 │   ├── __init__.py
-│   ├── targets.py             # Target management endpoints
-│   ├── context.py             # Context editing endpoints
-│   ├── requests.py            # HTTP request browser
-│   ├── sessions.py            # AI session management
-│   └── api.py                 # JSON API endpoints
-├── services/                   # Business logic layer
+│   ├── targets.py             # Target CRUD endpoints
+│   └── api.py                 # JSON API for HTMX
+├── services/                   # Business logic
 │   ├── __init__.py
-│   ├── target_service.py      # Target operations
-│   ├── context_service.py     # Context management
-│   └── analytics_service.py   # Data analysis
+│   └── target_service.py      # Target operations
 ├── templates/                  # Jinja2 templates
 │   ├── base.html              # Base layout
-│   ├── targets/               # Target views
-│   ├── requests/              # Request views
+│   ├── targets.html           # Target list view
+│   ├── target.html            # Target detail view
 │   └── components/            # Reusable components
-├── static/                     # Static assets
-│   ├── css/                   # Stylesheets
-│   ├── js/                    # JavaScript
-│   └── img/                   # Images
-└── middleware/                 # Custom middleware
-    ├── __init__.py
-    ├── auth.py                # Authentication (if needed)
-    └── logging.py             # Request logging
+│       ├── target_card.html
+│       ├── context_editor.html
+│       └── request_viewer.html
+└── static/                     # Static assets
+    ├── css/
+    │   └── main.css           # Tailwind styles
+    └── js/
+        └── app.js             # Minimal JS for editor setup
 ```
 
-### 1.2 Core Dependencies
+## Core Dependencies
+
 ```toml
 # Add to pyproject.toml
 fastapi = ">=0.104.0"
 uvicorn = {extras = ["standard"], version = ">=0.24.0"}
 jinja2 = ">=3.1.0"
 python-multipart = ">=0.0.6"  # Form handling
-httpx = ">=0.25.0"            # Async HTTP client
-python-markdown = ">=3.5.0"    # Markdown rendering
-pygments = ">=2.17.0"          # Syntax highlighting
 ```
 
-### 1.3 Database Models (Shared)
-- Use existing SQLAlchemy models from `db/models.py`
-- Add web-specific mixins if needed:
-  - `WebViewMixin` - Fields for UI display
-  - `SearchMixin` - Full-text search helpers
+## Frontend Dependencies (CDN)
+- HTMX - Dynamic UI updates without full page reloads
+- Tailwind CSS - Utility-first styling
+- CodeMirror 6 - Markdown editing
+- Prism.js - Syntax highlighting for HTTP
 
-## Phase 2: Target Management Interface
+## Feature Implementation
 
-### 2.1 Target Dashboard
-**Route**: `/targets`
+### 1. Target Dashboard (`/targets`)
 
-**Features**:
-- Grid/list view toggle
-- Real-time search and filtering
-- Bulk operations (status update, risk level)
-- Quick actions via HTMX (no page reload)
-- Context preview in expandable cards
-- Sort by: last activity, risk level, discovery date
+**Functionality:**
+- List all targets in a responsive grid
+- Display key info: host, port, status badge, risk level
+- Show quick stats: request count, last activity, notes count
+- Quick actions: Edit status, Update risk level, View details, Edit context
+- Filter by status and risk level with real-time search
+- Sort by last activity or discovery date
+- Link to target detail page
 
-**Components**:
-- Target card with status indicators
-- Risk level badges (color-coded)
-- Activity sparkline graph
-- Quick edit modals
+**UI Components:**
+- Enhanced target cards with clear visual hierarchy:
+  - Primary: Host/title prominently displayed
+  - Secondary: Protocol, port, and endpoint details
+  - Status badges: Color-coded (active=green, blocked=red, inactive=gray, completed=blue)
+  - Risk badges: Color-coded (low=green, medium=yellow, high=orange, critical=red)
+  - Quick stats bar showing requests, activity, notes
+  - Action buttons at bottom with clear separation
+- Search bar with instant filtering (300ms debounce)
+- Filter dropdown menus for status and risk
+- HTMX-powered updates (no page reload)
 
-### 2.2 Target Detail View
-**Route**: `/targets/{target_id}`
+### 2. Target Detail View (`/targets/{target_id}`)
 
-**Features**:
-- Tabbed interface:
-  - Overview (basic info, stats)
-  - Context (markdown editor)
-  - Notes (structured notes)
-  - Requests (HTTP history)
-  - Attempts (attack attempts)
-  - Timeline (activity feed)
-- Real-time updates via SSE
-- Export options (markdown, JSON)
+**Functionality:**
+- Display all target information
+- Three main sections via tabs:
+  - Overview: Basic info, status, risk, metadata
+  - Context: Dual-pane markdown editor
+  - Requests: HTTP request history
 
-### 2.3 Target Context Editor
-**Route**: `/targets/{target_id}/context`
+**Context Editor Features:**
+- Split view: User Context | Agent Context
+- CodeMirror with markdown syntax highlighting
+- Auto-save on blur with debouncing
+- Visual feedback for save status
+- Version number display (read-only)
 
-**Features**:
-- Split-pane editor (user context | agent context)
-- CodeMirror with:
-  - Markdown syntax highlighting
-  - Vim key bindings (optional)
-  - Auto-save with debouncing
-  - Version history sidebar
-- Context templates dropdown
-- Markdown preview toggle
-- Diff view for versions
+**Request Viewer Features:**
+- List of HTTP requests for this target
+- Expandable request/response details
+- Syntax highlighting with Prism.js
+- Show method, URL, status code, response time
+- Sort by timestamp
 
-## Phase 3: Request Browser & Analysis
+### 3. API Endpoints
 
-### 3.1 Request Explorer
-**Route**: `/requests`
+```python
+# Target endpoints
+GET    /api/targets           # List targets (JSON)
+GET    /api/targets/{id}      # Get target details
+PATCH  /api/targets/{id}      # Update target fields
+POST   /api/targets/{id}/context  # Save context
 
-**Features**:
-- Timeline view of all HTTP requests
-- Advanced filtering:
-  - By target, method, status code
-  - Date range picker
-  - Response time thresholds
-- Request/response viewer:
-  - Headers, cookies, body
-  - Syntax highlighting
-  - Copy as curl command
-- Bulk tagging interface
+# Request endpoints
+GET    /api/targets/{id}/requests  # Get target's HTTP requests
+```
 
-### 3.2 Request Detail View
-**Route**: `/requests/{request_id}`
+### 4. Database Integration
 
-**Features**:
-- Full request/response display
-- Link to associated target
-- Tag management
-- Response diff tool (compare requests)
-- Export options (HAR, curl)
+Use existing SQLAlchemy models:
+- `Target` - Main target entity
+- `TargetContext` - Context versions
+- `HttpRequest` - HTTP request logs
+- Leverage existing repositories from MCP server
 
-### 3.3 Request Analytics
-**Route**: `/requests/analytics`
+### 5. Critical UI Components
 
-**Features**:
-- Response time graphs
-- Status code distribution
-- Most requested endpoints
-- Cookie tracking analysis
-- Error pattern detection
+#### Loading State Component
+```html
+<!-- Add to base template -->
+<div id="loading-indicator" class="htmx-indicator fixed inset-0 bg-black bg-opacity-25 z-50 flex items-center justify-center">
+    <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-xl">
+        <svg class="animate-spin h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+        </svg>
+    </div>
+</div>
+```
 
-## Phase 4: AI Session Management
+#### Error Toast Component
+```html
+<!-- Toast container in base template -->
+<div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2">
+    <!-- Toasts inserted here by JavaScript -->
+</div>
 
-### 4.1 Session Dashboard
-**Route**: `/sessions`
+<script>
+function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `p-4 rounded-lg shadow-lg text-white ${
+        type === 'error' ? 'bg-red-600' :
+        type === 'success' ? 'bg-green-600' : 'bg-blue-600'
+    }`;
+    toast.textContent = message;
+    document.getElementById('toast-container').appendChild(toast);
+    setTimeout(() => toast.remove(), 5000);
+}
 
-**Features**:
-- Active/completed session list
-- Session progress indicators
-- Target association summary
-- Success rate metrics
+// Hook into HTMX events
+document.body.addEventListener('htmx:responseError', (evt) => {
+    showToast('Operation failed. Please try again.', 'error');
+});
+</script>
+```
 
-### 4.2 Session Detail View
-**Route**: `/sessions/{session_id}`
+#### Empty State Component
+```html
+<!-- Example: No targets empty state -->
+<div class="text-center py-12" id="empty-targets">
+    <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M5 12h14M12 5l7 7-7 7"></path>
+    </svg>
+    <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-white">No targets found</h3>
+    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+        Get started by adding your first target to begin testing.
+    </p>
+    <div class="mt-6">
+        <button onclick="openNewTargetModal()"
+                class="inline-flex items-center px-4 py-2 border border-transparent
+                       text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
+            <svg class="-ml-1 mr-2 h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clip-rule="evenodd"></path>
+            </svg>
+            Add Target
+        </button>
+    </div>
+</div>
+```
 
-**Features**:
-- Session timeline
-- Associated targets
-- Attempts summary
-- Request correlation
-- Objective tracking
+#### Keyboard Navigation Implementation
+```javascript
+// Add to app.js
+class KeyboardNavigation {
+    constructor() {
+        this.selectedIndex = -1;
+        this.setupShortcuts();
+    }
 
-## Phase 5: Advanced Features
+    setupShortcuts() {
+        document.addEventListener('keydown', (e) => {
+            // Don't interfere with input fields
+            if (e.target.matches('input, textarea, select')) {
+                if (e.key === 'Escape') {
+                    e.target.blur();
+                }
+                return;
+            }
 
-### 5.1 Search Interface
-**Route**: `/search`
+            // Global shortcuts
+            switch(e.key) {
+                case '?':
+                    if (e.shiftKey || e.ctrlKey) {
+                        e.preventDefault();
+                        this.showHelp();
+                    }
+                    break;
+                case 'f':
+                case '/':
+                    e.preventDefault();
+                    document.querySelector('[data-search-input]')?.focus();
+                    break;
+                case 'n':
+                    e.preventDefault();
+                    this.openNewTargetModal();
+                    break;
+                case 'j':
+                    e.preventDefault();
+                    this.navigateTargets(1);
+                    break;
+                case 'k':
+                    e.preventDefault();
+                    this.navigateTargets(-1);
+                    break;
+                case 'Enter':
+                    if (this.selectedIndex >= 0) {
+                        e.preventDefault();
+                        this.openSelectedTarget();
+                    }
+                    break;
+                case 'Escape':
+                    e.preventDefault();
+                    this.closeModalsAndClear();
+                    break;
+            }
 
-**Global search across**:
-- Targets (host, title, context)
-- Notes (content, tags)
-- Requests (URL, headers, body)
-- Sessions (objectives, descriptions)
+            // Combo shortcuts (e.g., g + t)
+            if (e.key === 'g') {
+                this.waitForNextKey('t', () => {
+                    window.location.href = '/targets';
+                });
+            }
+        });
+    }
 
-**Features**:
-- Faceted search results
-- Search history
-- Saved searches
+    showHelp() {
+        // Show keyboard shortcuts modal
+        document.getElementById('shortcuts-modal')?.classList.remove('hidden');
+    }
 
-### 5.2 Analytics Dashboard
-**Route**: `/analytics`
-
-**Visual analytics**:
-- Target discovery timeline
-- Risk distribution pie chart
-- Success rate trends
-- Most effective techniques
-- Activity heatmap
-
-### 5.3 Quick Command Palette
-**Keyboard shortcut**: `Cmd/Ctrl + K`
-
-**Features**:
-- Fuzzy search for navigation
-- Quick actions (create target, new note)
-- Recent items
-- Terminal command generation
-
-## Phase 6: Integration & Polish
-
-### 6.1 Terminal Integration
-- CLI command to launch web UI: `hiro web`
-- Auto-open browser option
-- Share port with MCP server
-- WebSocket for real-time sync
-
-### 6.2 Authentication & Security
-- Optional basic auth
-- API key for programmatic access
-- CORS configuration for MCP tools
-- Rate limiting
-
-### 6.3 Export & Reporting
-- Export formats:
-  - Markdown reports
-  - JSON data dumps
-  - CSV for analysis
-- Report templates:
-  - Target summary
-  - Session report
-  - Timeline export
-
-### 6.4 User Preferences
-- Dark/light theme toggle
-- Editor preferences (vim mode, font size)
-- Dashboard layout customization
-- Notification settings
+    navigateTargets(direction) {
+        const targets = document.querySelectorAll('[data-target-card]');
+        this.selectedIndex = Math.max(0, Math.min(targets.length - 1, this.selectedIndex + direction));
+        targets.forEach((t, i) => {
+            t.classList.toggle('ring-2', i === this.selectedIndex);
+            t.classList.toggle('ring-blue-500', i === this.selectedIndex);
+        });
+    }
+}
+```
 
 ## Implementation Strategy
 
-### Incremental Rollout
-1. **MVP**: Target dashboard + context editor
-2. **Phase 2**: Request browser
-3. **Phase 3**: Session management
-4. **Phase 4**: Analytics & search
-5. **Phase 5**: Polish & advanced features
+### Phase 1: Foundation (Day 1)
+- [ ] Set up FastAPI app structure
+- [ ] Create base template with Tailwind
+- [ ] Implement target list endpoint
+- [ ] Basic target dashboard UI
 
-### Development Approach
-- Start with server-side rendering (HTMX)
-- Add interactivity progressively
-- Keep JavaScript minimal
-- Focus on keyboard navigation
-- Test with real workflow
+### Phase 2: Target Details (Day 2)
+- [ ] Target detail page with tabs
+- [ ] Context editor integration
+- [ ] HTTP request viewer
+- [ ] HTMX interactions
 
-### Performance Considerations
-- Pagination for large datasets
-- Lazy loading for request bodies
-- Debounced auto-save
-- Caching for analytics
-- Database query optimization
+### Phase 3: Polish (Day 3)
+- [ ] Status/risk level updates
+- [ ] Filter and sort functionality
+- [ ] Error handling
+- [ ] Dark mode support
+
+## UI/UX Guidelines
+
+### Design Principles
+- **Minimal**: Focus on essential information
+- **Fast**: Server-side rendering with selective updates
+- **Keyboard-friendly**: Tab navigation, shortcuts for common actions
+- **Responsive**: Works on desktop and tablet (mobile not priority)
+- **Feedback**: Clear loading states and error handling
+- **Guidance**: Helpful empty states for new users
+
+### Visual Hierarchy
+1. Target host/title - Most prominent
+2. Status and risk indicators - High visibility
+3. Context preview - Subdued but accessible
+4. Metadata - Available but not prominent
+
+### Color Scheme
+- Use Tailwind's default palette
+- Status colors: green (active), gray (inactive), red (blocked), blue (completed)
+- Risk colors: green (low), yellow (medium), orange (high), red (critical)
+- Dark mode with `dark:` utilities
+
+### Keyboard Navigation
+- **Tab order**: Logical flow through all interactive elements
+- **Keyboard shortcuts**:
+  - `Ctrl+/` or `?` - Show keyboard shortcuts help modal
+  - `g t` - Go to targets dashboard
+  - `n` - Create new target (opens modal)
+  - `f` or `/` - Focus search/filter input
+  - `Escape` - Close modals, clear filters, or cancel operations
+  - `j/k` - Navigate up/down through target list
+  - `Enter` - Open selected target
+- **Focus indicators**: Clear visible focus rings on all interactive elements
+
+### Loading & Error States
+- **Loading indicators**: Spinner overlay for all HTMX requests
+  - Semi-transparent background overlay
+  - Centered spinner with smooth animation
+  - Prevent multiple simultaneous requests
+- **Error handling**:
+  - Toast notifications for errors (auto-dismiss after 5 seconds)
+  - Inline error messages for form validation
+  - Retry buttons for failed operations
+- **Success feedback**: Brief success toasts for completed actions
+
+### Empty States
+- **No targets**: Welcome message with "Add your first target" CTA
+- **No HTTP requests**: Informative message "Requests will appear here after testing"
+- **No context**: Prompt to "Add context to help the AI understand this target"
+- **No search results**: "No targets match your search" with clear filters button
+- Each empty state includes:
+  - Relevant icon or illustration
+  - Clear explanation text
+  - Actionable next step (button or instruction)
+
+## Development Commands
+
+```bash
+# Run the web server
+uvicorn src.hiro.web.app:app --reload --port 8000
+
+# Or add to existing CLI
+hiro web --port 8000
+```
 
 ## Success Metrics
 
-### User Experience
-- Time to find specific target: < 3 seconds
-- Context save latency: < 500ms
-- Page load time: < 1 second
-- Keyboard-only navigation possible
+### Performance
+- Page load time: < 500ms
+- Context save latency: < 200ms
+- Request list load: < 300ms
 
-### Feature Adoption
-- % of targets with context filled
-- Web vs terminal tool usage ratio
-- Most used web features
-- User feedback scores
-
-### Technical Health
-- API response times
-- Database query performance
-- WebSocket connection stability
-- Browser compatibility
-
-## Future Enhancements
-
-### Potential Add-ons
-1. **Collaboration Features**
-   - Multi-user support
-   - Comment threads on targets
-   - Shared sessions
-
-2. **AI Enhancements**
-   - Context suggestions
-   - Pattern recognition
-   - Automated tagging
-
-3. **Visualization**
-   - Network topology graphs
-   - Attack path visualization
-   - 3D timeline view
-
-4. **Mobile Support**
-   - Responsive design
-   - Touch gestures
-   - Mobile-specific views
+### Functionality
+- All CRUD operations work without page reload
+- Context changes persist immediately
+- HTTP requests display correctly
 
 ## Notes
 
-### Design Decisions
-- **HTMX over SPA**: Reduces complexity, leverages server-side rendering
-- **CodeMirror over simple textarea**: Professional editing experience
-- **FastAPI over Flask**: Async support, better performance
-- **Tailwind over custom CSS**: Rapid development, consistent design
+### Why This Approach
+- **HTMX over SPA**: Simpler, faster development, less JavaScript complexity
+- **CodeMirror for editing**: Professional editing experience for markdown
+- **Server-side first**: Leverages existing Python backend code
+- **Minimal dependencies**: Reduces maintenance burden
 
-### Integration Points
-- Shares database with MCP server
-- Uses same repository classes
-- Respects MCP tool changes
-- Can trigger MCP tool execution
+### Integration with MCP
+- Shares database and models
+- Web changes immediately visible to MCP tools
+- Can run alongside MCP server on different port
+- No authentication in MVP (local use only)
 
-### Development Priority
-Focus on features that are painful in terminal:
-1. Markdown editing (context)
-2. Visual data browsing (requests)
-3. Bulk operations (targets)
-4. Analytics (patterns)
+### What We're NOT Building (Yet)
+- User authentication
+- Multi-user support
+- Real-time WebSocket updates
+- Complex analytics
+- Report generation
+- Mobile-specific features
+- API rate limiting
+- File uploads
 
-This plan provides a comprehensive web overlay that enhances rather than replaces the terminal workflow, giving users the best tool for each task.
+This MVP focuses on the essential features that provide the most value for managing targets and their context through a web interface, while keeping the implementation simple and maintainable.

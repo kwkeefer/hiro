@@ -1,0 +1,6 @@
+/* Custom styles for Hiro Web */
+
+/* Additional utility classes */
+.min-w-64 {
+    min-width: 16rem;
+}

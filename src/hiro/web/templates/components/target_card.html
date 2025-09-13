@@ -1,0 +1,98 @@
+<!-- Reusable target card component -->
+<div data-target-card
+     data-target-id="{{ target.id }}"
+     class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 hover:shadow-md transition-shadow"
+     id="target-{{ target.id }}">
+    <!-- Header with primary info -->
+    <div class="flex items-start justify-between mb-3">
+        <div class="flex-1 min-w-0">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white truncate">
+                {{ target.title or target.host }}
+            </h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400">
+                {{ target.protocol }}://{{ target.host }}{% if target.port %}:{{ target.port }}{% endif %}
+            </p>
+        </div>
+        <div class="flex items-center space-x-2 flex-shrink-0">
+            <!-- Status Badge -->
+            <span class="px-2 py-1 text-xs font-medium rounded-full
+                {% if target.status == 'active' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
+                {% elif target.status == 'blocked' %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200
+                {% elif target.status == 'completed' %}bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200
+                {% else %}bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200{% endif %}">
+                {{ (target.status.value if target.status.value else target.status)|title }}
+            </span>
+        </div>
+    </div>
+
+    <!-- Risk Level -->
+    <div class="mb-3">
+        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+            {% if target.risk_level == 'critical' %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200
+            {% elif target.risk_level == 'high' %}bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200
+            {% elif target.risk_level == 'medium' %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200
+            {% else %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200{% endif %}">
+            Risk: {{ (target.risk_level.value if target.risk_level.value else target.risk_level)|title }}
+        </span>
+    </div>
+
+    <!-- Quick stats -->
+    <div class="grid grid-cols-3 gap-4 text-sm text-gray-600 dark:text-gray-400 mb-3">
+        <div>
+            <span class="block font-medium text-xs">Requests</span>
+            <span class="text-gray-900 dark:text-white">{{ target.requests|length if target.requests else 0 }}</span>
+        </div>
+        <div>
+            <span class="block font-medium text-xs">Notes</span>
+            <span class="text-gray-900 dark:text-white">{{ target.notes|length if target.notes else 0 }}</span>
+        </div>
+        <div>
+            <span class="block font-medium text-xs">Activity</span>
+            <span class="text-gray-900 dark:text-white text-xs">{{ target.last_activity.strftime('%m/%d') }}</span>
+        </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="flex items-center justify-between pt-3 border-t border-gray-200 dark:border-gray-600">
+        <div class="flex space-x-2">
+            <a href="/targets/{{ target.id }}"
+               class="text-blue-600 hover:text-blue-800 dark:text-blue-400 text-sm font-medium">
+                View Details
+            </a>
+            <a href="/targets/{{ target.id }}?tab=context"
+               class="text-gray-600 hover:text-gray-800 dark:text-gray-400 text-sm">
+                Edit Context
+            </a>
+        </div>
+        <div class="flex space-x-2">
+            <select class="text-xs border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                    hx-patch="/api/targets/{{ target.id }}"
+                    hx-trigger="change"
+                    hx-target="#target-{{ target.id }}"
+                    hx-swap="outerHTML"
+                    hx-headers='{"Content-Type": "application/json"}'
+                    hx-vals='js:{status: event.target.value}'
+                    data-success-message="Status updated">
+                <option value="" class="text-gray-500 dark:text-gray-400">Status</option>
+                <option value="active" {% if target.status == 'active' %}selected{% endif %} class="text-gray-900 dark:text-gray-100">Active</option>
+                <option value="inactive" {% if target.status == 'inactive' %}selected{% endif %} class="text-gray-900 dark:text-gray-100">Inactive</option>
+                <option value="blocked" {% if target.status == 'blocked' %}selected{% endif %} class="text-gray-900 dark:text-gray-100">Blocked</option>
+                <option value="completed" {% if target.status == 'completed' %}selected{% endif %} class="text-gray-900 dark:text-gray-100">Completed</option>
+            </select>
+            <select class="text-xs border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                    hx-patch="/api/targets/{{ target.id }}"
+                    hx-trigger="change"
+                    hx-target="#target-{{ target.id }}"
+                    hx-swap="outerHTML"
+                    hx-headers='{"Content-Type": "application/json"}'
+                    hx-vals='js:{risk_level: event.target.value}'
+                    data-success-message="Risk level updated">
+                <option value="" class="text-gray-500 dark:text-gray-400">Risk</option>
+                <option value="low" {% if target.risk_level == 'low' %}selected{% endif %} class="text-gray-900 dark:text-gray-100">Low</option>
+                <option value="medium" {% if target.risk_level == 'medium' %}selected{% endif %} class="text-gray-900 dark:text-gray-100">Medium</option>
+                <option value="high" {% if target.risk_level == 'high' %}selected{% endif %} class="text-gray-900 dark:text-gray-100">High</option>
+                <option value="critical" {% if target.risk_level == 'critical' %}selected{% endif %} class="text-gray-900 dark:text-gray-100">Critical</option>
+            </select>
+        </div>
+    </div>
+</div>
