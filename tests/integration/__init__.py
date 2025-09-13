@@ -1,1 +1,1 @@
-"""Integration tests for code-mcp."""
+"""Integration tests for hiro."""

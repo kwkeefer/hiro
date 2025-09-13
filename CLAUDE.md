@@ -21,7 +21,7 @@ This project uses centralized AI assistant context and instructions.
 ### Key Architectural Principles
 - **Hybrid Approach**: Use protocols for organization, direct registration for FastMCP compatibility
 - **Module Structure**: Follow `src/` layout with `core/`, `api/`, `db/`, `utils/` organization
-- **Configuration**: Located in `src/code_mcp/core/config/` per ADR-006
+- **Configuration**: Located in `src/hiro/core/config/` per ADR-006
 - **Testing**: Integration tests verify the hybrid architecture works correctly
 
 ### Development Workflow

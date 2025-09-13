@@ -1,1 +1,1 @@
-"""Test suite for code-mcp."""
+"""Test suite for hiro."""

@@ -1,11 +1,11 @@
-# Project Context for code-mcp
+# Project Context for hiro
 
 ## Overview
 Getting started with MCP stuff
 
 ## Project Type
-- **Name**: code-mcp
-- **Package**: code_mcp
+- **Name**: hiro
+- **Package**: hiro
 - **Version**: 0.1.0
 - **Python Version**: 3.12
 - **Author**: Kyle Keefer (kwkeefer@gmail.com)
@@ -24,8 +24,8 @@ Getting started with MCP stuff
 
 ## Project Structure
 ```
-code_mcp/
-├── src/code_mcp/   # Main package source code
+hiro/
+├── src/hiro/   # Main package source code
 │   ├── core/                              # Core business logic
 │   │   └── config/                        # Configuration management
 │   ├── api/                               # API interfaces
@@ -76,7 +76,7 @@ code_mcp/
 **IMPORTANT**: Despite having multiple directories under `servers/`, there is only **ONE** MCP server.
 
 ```
-src/code_mcp/servers/           # Tool collections for the unified server
+src/hiro/servers/           # Tool collections for the unified server
 ├── http/                        # HTTP request tools (core functionality)
 │   ├── tools.py                 # HTTP request execution
 │   ├── providers.py             # Tool provider with config injection
@@ -87,7 +87,7 @@ src/code_mcp/servers/           # Tool collections for the unified server
     └── (works WITH http/, not separately)
 ```
 
-When you run `code_mcp serve-http`:
+When you run `hiro serve-http`:
 - **Always includes**: HTTP request tools
 - **When DB configured**: Also includes target management tools
 - **Result**: Single unified server with multiple tool categories
@@ -113,6 +113,13 @@ We use a **hybrid approach** that balances architectural purity with pragmatic s
 - **Architecture scales** - Easy to add new tool categories with direct registration
 
 **Key principle**: Use protocols for **organization and testing**, direct registration for **simplicity and compatibility**.
+
+### MCP Tool Parameter Pattern
+When creating MCP tools, follow the parameter transformation pattern (ADR-014):
+- Accept JSON strings for complex types (dicts, lists) in tool signatures
+- Use Pydantic models internally for validation and transformation
+- Include clear JSON examples in parameter descriptions
+- See `HttpRequestTool` and AI logging tools for reference implementations
 
 ## Notes for AI Assistants
 - Always use the `src/` layout when adding new modules

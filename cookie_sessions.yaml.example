@@ -1,0 +1,68 @@
+# Cookie Session Configuration for hiro
+#
+# This file defines named cookie sessions that can be accessed by the LLM
+# through MCP resources. Each session points to a JSON file containing cookies
+# that are updated by external authentication scripts.
+#
+# Default location: $XDG_CONFIG_HOME/hiro/cookie_sessions.yaml
+#                   (usually ~/.config/hiro/cookie_sessions.yaml)
+#
+# Cookie files should be stored in: $XDG_DATA_HOME/hiro/cookies/
+#                                   (usually ~/.local/share/hiro/cookies/)
+
+version: "1.0"
+
+sessions:
+  # Example GitHub session
+  github_personal:
+    description: "GitHub personal account session cookies"
+    # Path to cookie JSON file - can be absolute or relative to XDG data dir
+    cookie_file: "github_personal.json"  # Relative: ~/.local/share/hiro/cookies/github_personal.json
+    # cookie_file: "~/.local/share/hiro/cookies/github_personal.json"  # Absolute with ~
+    # cookie_file: "/absolute/path/to/cookies.json"  # Full absolute path
+
+    # Cache TTL in seconds (optional, defaults to 60)
+    cache_ttl: 3600  # Cache for 1 hour
+
+    # Optional metadata for the LLM
+    metadata:
+      domains: ["github.com", "api.github.com"]
+      account_type: "personal"
+      requires_2fa: true
+
+  # Example Slack workspace session
+  slack_workspace:
+    description: "Slack workspace authentication"
+    cookie_file: "slack_workspace.json"
+    cache_ttl: 1800  # 30 minutes
+    metadata:
+      domains: ["*.slack.com"]
+      workspace: "example-workspace"
+
+  # Example internal application
+  internal_app:
+    description: "Internal application session"
+    cookie_file: "internal_app.json"
+    cache_ttl: 900  # 15 minutes
+    metadata:
+      domains: ["app.internal.com", "api.internal.com"]
+      environment: "production"
+
+# Cookie JSON file format:
+# {
+#   "session_id": "abc123...",
+#   "auth_token": "xyz789...",
+#   "csrf_token": "def456...",
+#   "any_other_cookie": "value"
+# }
+#
+# Security Notes:
+# 1. Cookie files should have restricted permissions (chmod 600)
+# 2. Never commit cookie files to version control
+# 3. Consider using encrypted storage for sensitive cookies
+# 4. Regularly rotate cookies and session tokens
+#
+# Usage in MCP:
+# 1. List available sessions: ListMcpResources()
+# 2. Fetch cookies: ReadMcpResource("cookie-session://github_personal")
+# 3. Use in HTTP requests with the fetched cookie values

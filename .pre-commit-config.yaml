@@ -28,5 +28,6 @@ repos:
         additional_dependencies: [
           types-click,
           pydantic-settings,
+          types-PyYAML,
         ]
         files: ^src/

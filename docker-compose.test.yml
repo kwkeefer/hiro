@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  test-db:
+    image: postgres:16-alpine
+    container_name: hiro-test-db
+    environment:
+      POSTGRES_USER: test_user
+      POSTGRES_PASSWORD: test_pass
+      POSTGRES_DB: hiro_test
+    ports:
+      - "5433:5432"  # Port 5433 on host, 5432 in container (different from production on 5432)
+    volumes:
+      - test-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test_user -d hiro_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - test-network
+
+volumes:
+  test-db-data:
+    driver: local
+
+networks:
+  test-network:
+    driver: bridge

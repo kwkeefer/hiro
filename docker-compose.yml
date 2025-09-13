@@ -4,7 +4,7 @@ version: '3.8'
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: code_mcp_postgres
+    container_name: hiro_postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
@@ -19,7 +19,7 @@ services:
 
   pgadmin:
     image: dpage/pgadmin4:latest
-    container_name: code_mcp_pgadmin
+    container_name: hiro_pgadmin
     restart: unless-stopped
     environment:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}

@@ -1,4 +1,4 @@
-# Claude Code Instructions for code-mcp
+# Claude Code Instructions for hiro
 
 ## Context-Aware File Usage
 
@@ -29,7 +29,7 @@
 ### Common Tasks
 
 #### Adding a New Feature
-1. Create module in appropriate directory under `src/code_mcp/`
+1. Create module in appropriate directory under `src/hiro/`
 2. Add corresponding tests in `tests/` (mirror the source structure)
 3. Update type hints and add docstrings
 4. Run `make format lint typecheck test`
@@ -76,10 +76,10 @@ make build
 ### File Navigation Patterns
 
 When looking for code:
-- Business logic → `src/code_mcp/core/`
-- API endpoints → `src/code_mcp/api/`
-- Database models → `src/code_mcp/db/`
-- Helper functions → `src/code_mcp/utils/`
+- Business logic → `src/hiro/core/`
+- API endpoints → `src/hiro/api/`
+- Database models → `src/hiro/db/`
+- Helper functions → `src/hiro/utils/`
 - Tests → `tests/` (mirrors source structure)
 - Configuration → `config/`
 - Scripts → `scripts/`
@@ -128,7 +128,7 @@ uv remove package-name
 
 #### Error Handling
 ```python
-from code_mcp.core.exceptions import ValidationError
+from hiro.core.exceptions import ValidationError
 
 def process_data(data: dict) -> Result:
     if not validate_data(data):
@@ -155,7 +155,7 @@ def some_function():
 #### Type Hints
 ```python
 from typing import Optional, Union
-from code_mcp.core.models import User
+from hiro.core.models import User
 
 def get_user(user_id: int) -> Optional[User]:
     """Get user by ID, returns None if not found."""
@@ -164,14 +164,14 @@ def get_user(user_id: int) -> Optional[User]:
 
 ### CLI Development
 
-The CLI is built with click. Main entry point is `src/code_mcp/cli.py`.
+The CLI is built with click. Main entry point is `src/hiro/cli.py`.
 
 ```bash
 # Test CLI during development
 make run
 
 # Or directly
-code_mcp --help
+hiro --help
 ```
 
 ### Important Reminders

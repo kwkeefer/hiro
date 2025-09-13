@@ -4,9 +4,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from code_mcp.api.mcp.server import FastMcpServerAdapter
-from code_mcp.servers.http.config import HttpConfig
-from code_mcp.servers.http.providers import HttpToolProvider
+from hiro.api.mcp.server import FastMcpServerAdapter
+from hiro.servers.http.config import HttpConfig
+from hiro.servers.http.providers import HttpToolProvider
 
 
 @pytest.mark.integration

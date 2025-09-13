@@ -7,7 +7,7 @@
 Need to organize Python package structure in a way that prevents accidental imports of development code and ensures proper testing isolation.
 
 ## Decision
-Use `src/` layout where all package code lives under `src/code_mcp/`.
+Use `src/` layout where all package code lives under `src/hiro/`.
 
 ## Consequences
 - ✅ Prevents importing from the development directory

@@ -2,8 +2,8 @@
 
 import pytest
 
-from code_mcp.servers.http.config import HttpConfig
-from code_mcp.servers.http.providers import HttpToolProvider
+from hiro.servers.http.config import HttpConfig
+from hiro.servers.http.providers import HttpToolProvider
 
 
 @pytest.mark.integration

@@ -1,4 +1,4 @@
-# Quick Reference - code-mcp
+# Quick Reference - hiro
 
 ## Essential Rules (Read This First!)
 
@@ -11,7 +11,7 @@
 
 ### Project Structure
 ```
-src/code_mcp/
+src/hiro/
   core/   → Business logic
   api/    → External interfaces
   db/     → Database code

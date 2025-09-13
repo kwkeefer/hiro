@@ -22,4 +22,4 @@ RUN uv pip install --system -e .
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
 USER appuser
 # Set the entrypoint to the CLI
-ENTRYPOINT ["code_mcp"]
+ENTRYPOINT ["hiro"]

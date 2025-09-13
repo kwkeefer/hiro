@@ -26,7 +26,7 @@ Skip for:
 **Error Handling**:
 ```python
 # Always use custom exceptions
-from code_mcp.core.exceptions import ValidationError
+from hiro.core.exceptions import ValidationError
 
 # Never catch bare Exception
 # Always log before re-raising

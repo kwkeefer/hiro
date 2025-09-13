@@ -1,7 +1,7 @@
 .PHONY: help dev install test test-unit test-integration test-cov lint format typecheck clean build run
 
 PYTHON := python3.12
-PACKAGE := code_mcp
+PACKAGE := hiro
 SRC_DIR := src/$(PACKAGE)
 TEST_DIR := tests
 
@@ -79,3 +79,37 @@ docker-compose-up: ## Start services with docker-compose
 
 docker-compose-down: ## Stop services with docker-compose
 	docker-compose down
+
+# Test database commands (uses port 5433 to avoid conflicts with production on 5432)
+test-db-up: ## Start test database container on port 5433
+	docker-compose -f docker-compose.test.yml up -d
+	@echo "Waiting for test database to be ready..."
+	@sleep 3
+
+test-db-down: ## Stop and remove test database container
+	docker-compose -f docker-compose.test.yml down -v
+
+test-db-logs: ## Show test database logs
+	docker-compose -f docker-compose.test.yml logs -f test-db
+
+test-db-shell: ## Open psql shell to test database
+	docker-compose -f docker-compose.test.yml exec test-db psql -U test_user -d hiro_test
+
+test-db-migrate: test-db-up ## Run migrations on test database
+	DATABASE_URL=postgresql+asyncpg://test_user:test_pass@localhost:5433/hiro_test \
+	uv run alembic upgrade head
+
+test-with-db: test-db-up test-db-migrate ## Run database tests with real PostgreSQL
+	DATABASE_URL=postgresql+asyncpg://test_user:test_pass@localhost:5433/hiro_test \
+	uv run pytest $(TEST_DIR) -m "database" -v
+	$(MAKE) test-db-down
+
+test-ai-logging: test-db-up test-db-migrate ## Run AI logging tests with database
+	DATABASE_URL=postgresql+asyncpg://test_user:test_pass@localhost:5433/hiro_test \
+	uv run pytest $(TEST_DIR)/servers/ai_logging -v
+	$(MAKE) test-db-down
+
+test-ai-logging-keep: test-db-up test-db-migrate ## Run AI logging tests and keep DB running
+	DATABASE_URL=postgresql+asyncpg://test_user:test_pass@localhost:5433/hiro_test \
+	uv run pytest $(TEST_DIR)/servers/ai_logging -v
+	@echo "Test database still running on port 5433. Use 'make test-db-down' to stop."

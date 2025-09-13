@@ -1,4 +1,4 @@
-# code-mcp
+# hiro
 
 Getting started with MCP stuff
 
@@ -21,8 +21,8 @@ Getting started with MCP stuff
 
 ```bash
 # Clone the repository
-git clone https://github.com/kwkeefer/code_mcp.git
-cd code_mcp
+git clone https://github.com/kwkeefer/hiro.git
+cd hiro
 
 # Set up development environment
 make dev
@@ -32,7 +32,7 @@ make dev
 
 ```bash
 # Install with uv
-uv pip install code_mcp
+uv pip install hiro
 
 # Or install from source
 make install
@@ -44,16 +44,111 @@ make install
 
 ```bash
 # Run the CLI
-code_mcp --help
+hiro --help
+
+# Start the HTTP MCP server
+hiro serve-http
+
+# Start with proxy routing (e.g., through Burp Suite)
+hiro serve-http --proxy http://127.0.0.1:8080
 
 # Or using make
 make run
 ```
 
+### Cookie Session Management
+
+The HTTP server includes dynamic cookie session management via MCP resources. This allows the LLM to fetch and use authentication cookies from external files, enabling authenticated HTTP requests.
+
+#### Setup
+
+1. **Create configuration file**:
+   ```bash
+   # Configuration location: $XDG_CONFIG_HOME/hiro/cookie_sessions.yaml
+   # (defaults to ~/.config/hiro/cookie_sessions.yaml if XDG_CONFIG_HOME is not set)
+
+   CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/hiro"
+   mkdir -p "$CONFIG_DIR"
+
+   cat > "$CONFIG_DIR/cookie_sessions.yaml" << 'EOF'
+   version: "1.0"
+   sessions:
+     github_personal:
+       description: "GitHub personal account session"
+       cookie_file: "github_personal.json"  # Relative to data directory
+       cache_ttl: 3600  # Cache for 1 hour
+       metadata:
+         domains: ["github.com", "api.github.com"]
+   EOF
+   ```
+
+2. **Create cookie files** with proper permissions:
+   ```bash
+   # Cookie storage: $XDG_DATA_HOME/hiro/cookies/
+   # (defaults to ~/.local/share/hiro/cookies/ if XDG_DATA_HOME is not set)
+
+   DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/hiro/cookies"
+   mkdir -p "$DATA_DIR"
+
+   # Create a cookie file with restricted permissions
+   echo '{"session_token": "abc123", "csrf_token": "xyz789"}' > "$DATA_DIR/github_personal.json"
+   chmod 600 "$DATA_DIR/github_personal.json"
+   ```
+
+3. **Use in MCP**: The LLM can now:
+   - List available sessions: `ListMcpResources()`
+   - Fetch cookies: `ReadMcpResource("cookie-session://github_personal")`
+   - Use cookies in HTTP requests
+
+#### Security Features
+
+- **File permission validation**: Cookie files must have 0600 or 0400 permissions
+- **Path traversal protection**: Cookie files must be within allowed directories
+- **Caching**: Reduces file I/O with configurable TTL per session
+- **Session name validation**: Only alphanumeric, underscore, and hyphen characters allowed
+
+#### External Authentication Scripts
+
+Cookie sessions are designed to work with external authentication scripts that update the JSON files:
+
+```python
+#!/usr/bin/env python3
+# Example authentication script
+import json
+import os
+from pathlib import Path
+
+def update_cookies(session_name: str, cookies: dict):
+    """Update cookie file for a session."""
+    # Respect XDG_DATA_HOME if set, otherwise use default
+    xdg_data_home = os.environ.get("XDG_DATA_HOME", str(Path.home() / ".local/share"))
+    cookie_dir = Path(xdg_data_home) / "hiro/cookies"
+    cookie_file = cookie_dir / f"{session_name}.json"
+
+    # Create directory if needed
+    cookie_dir.mkdir(parents=True, exist_ok=True)
+
+    # Write cookies with secure permissions
+    with open(cookie_file, 'w') as f:
+        json.dump(cookies, f)
+    os.chmod(cookie_file, 0o600)
+
+# Authenticate and get cookies (implementation depends on service)
+cookies = authenticate_to_service()
+update_cookies("github_personal", cookies)
+```
+
+See `cookie_sessions.yaml.example` for a complete configuration example.
+
 ### As a Library
 
 ```python
-from code_mcp import __version__
+from hiro import __version__
+from hiro.servers.http.cookie_sessions import CookieSessionProvider
+
+# Use cookie sessions programmatically
+provider = CookieSessionProvider()
+resources = provider.get_resources()
 ```
 
 ## Development
@@ -111,9 +206,9 @@ make docker-compose-down
 ## Project Structure
 
 ```
-code_mcp/
+hiro/
 ├── src/
-│   └── code_mcp/
+│   └── hiro/
 │       ├── __init__.py
 │       ├── core/           # Core business logic
 │       ├── api/            # API interfaces

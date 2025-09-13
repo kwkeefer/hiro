@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "code_mcp"
+name = "hiro"
 version = "0.1.0"
 description = "Getting started with MCP stuff"
 readme = "README.md"
@@ -35,6 +35,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
     "pytest-cov>=4.1.0",
     "pytest-xdist>=3.5.0",
     "ruff>=0.5.0",
@@ -43,20 +44,21 @@ dev = [
 ]
 test = [
     "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
     "pytest-cov>=4.1.0",
     "pytest-xdist>=3.5.0",
 ]
 
 [project.scripts]
-code_mcp = "code_mcp.cli:main"
+hiro = "hiro.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/kwkeefer/code_mcp"
-Repository = "https://github.com/kwkeefer/code_mcp"
-Issues = "https://github.com/kwkeefer/code_mcp/issues"
+Homepage = "https://github.com/kwkeefer/hiro"
+Repository = "https://github.com/kwkeefer/hiro"
+Issues = "https://github.com/kwkeefer/hiro/issues"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/code_mcp"]
+packages = ["src/hiro"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -71,18 +73,19 @@ markers = [
     "unit: Unit tests",
     "integration: Integration tests",
     "slow: Slow tests",
+    "database: Tests that require a real database connection",
 ]
 
 [tool.coverage.run]
-source_pkgs = ["code_mcp"]
+source_pkgs = ["hiro"]
 branch = true
 parallel = true
 omit = [
-    "src/code_mcp/__init__.py",
+    "src/hiro/__init__.py",
 ]
 
 [tool.coverage.paths]
-code_mcp = ["src/code_mcp", "*/code_mcp/src/code_mcp"]
+hiro = ["src/hiro", "*/hiro/src/hiro"]
 
 [tool.coverage.report]
 exclude_lines = [
@@ -114,7 +117,13 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["code_mcp"]
+known-first-party = ["hiro"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/fixtures/factories.py" = ["ARG004"]  # Unused static method arguments
+"tests/servers/ai_logging/conftest.py" = ["ARG001"]  # Fixtures need dependencies even if not directly used
+"tests/servers/ai_logging/test_tools.py" = ["ARG002"]  # Test fixtures may not be directly used
+"tests/utils/mcp_test_helpers.py" = ["ARG002"]  # Mock methods need matching signatures
 
 [tool.mypy]
 python_version = "3.12"
@@ -132,17 +141,19 @@ pretty = true
 
 # Gradually enable stricter checks
 [[tool.mypy.overrides]]
-module = "code_mcp.core.*"
+module = "hiro.core.*"
 disallow_untyped_defs = true   # Strict for core modules
 
 [[tool.mypy.overrides]]
-module = "code_mcp.models.*"
+module = "hiro.models.*"
 disallow_untyped_defs = true   # Strict for data models
 
 [dependency-groups]
 dev = [
     "mypy>=1.17.1",
+    "pytest-asyncio>=1.1.0",
     "ruff>=0.12.12",
+    "types-pyyaml>=6.0.12.20250822",
 ]
 test = [
     "pytest-asyncio>=1.1.0",

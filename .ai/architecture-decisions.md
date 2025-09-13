@@ -1,4 +1,4 @@
-# Architecture Decisions for code-mcp
+# Architecture Decisions for hiro
 
 This document provides a quick reference to all architectural decisions. For detailed information, see the individual ADR files in `.ai/adrs/`.
 

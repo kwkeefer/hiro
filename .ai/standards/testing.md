@@ -2,7 +2,7 @@
 
 ## Test Organization
 Tests mirror source structure:
-- `src/code_mcp/core/feature.py`
+- `src/hiro/core/feature.py`
 - `tests/core/test_feature.py`
 
 ## Markers (Required)
