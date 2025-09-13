@@ -183,8 +183,8 @@ async def target_with_history(
         note_data = TargetNoteFactory.create_data(
             target_id=target.id,
             note_type="reconnaissance",
-            title=f"Discovery Note {i+1}",
-            content=f"Note {i+1}: Discovery information",
+            title=f"Discovery Note {i + 1}",
+            content=f"Note {i + 1}: Discovery information",
         )
         note = await note_repo.create(note_data)
         notes.append(note)

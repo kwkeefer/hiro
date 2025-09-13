@@ -233,7 +233,7 @@ class TestDataBuilder:
         for i in range(3):
             target = await TestDataBuilder.create_target_with_notes_and_attempts(
                 session,
-                title=f"Target {i+1}",
+                title=f"Target {i + 1}",
                 status=TargetStatus.ACTIVE,
             )
             targets.append(target)

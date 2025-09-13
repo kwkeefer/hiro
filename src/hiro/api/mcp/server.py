@@ -103,6 +103,21 @@ class FastMcpServerAdapter:
                 description="Search and filter targets by host, status, risk level, or protocol.",
             )
 
+        # Register context management tools (simplified to 2 tools)
+        if hasattr(provider, "_get_context_tool"):
+            self._mcp.tool(
+                provider._get_context_tool.execute,
+                name="get_target_context",
+                description="Get current or specific context version for a target.",
+            )
+
+        if hasattr(provider, "_update_context_tool"):
+            self._mcp.tool(
+                provider._update_context_tool.execute,
+                name="update_target_context",
+                description="Create or update target context (creates new immutable version).",
+            )
+
         # For future tool types, we can add similar direct registrations here
         # This avoids the complexity of generic wrappers while keeping provider organization
 

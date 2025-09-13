@@ -9,8 +9,8 @@ from uuid import UUID
 from pydantic import BaseModel, Field, field_validator
 
 from hiro.core.mcp.exceptions import ToolError
-from hiro.db.models import RiskLevel, TargetStatus
-from hiro.db.repositories import TargetRepository
+from hiro.db.models import ContextChangeType, RiskLevel, TargetStatus
+from hiro.db.repositories import TargetContextRepository, TargetRepository
 from hiro.db.schemas import TargetCreate, TargetSearchParams, TargetUpdate
 
 logger = logging.getLogger(__name__)
@@ -615,4 +615,267 @@ class SearchTargetsTool:
             logger.error(f"Failed to search targets: {e}")
             raise ToolError(
                 "search_targets", f"Failed to search targets: {str(e)}"
+            ) from e
+
+
+class GetTargetContextTool:
+    """Tool for retrieving target context."""
+
+    def __init__(
+        self,
+        context_repo: TargetContextRepository | Any | None = None,
+        target_repo: TargetRepository | Any | None = None,
+    ):
+        """Initialize get context tool.
+
+        Args:
+            context_repo: Repository for managing context versions
+            target_repo: Repository for managing targets
+        """
+        self._context_repo = context_repo
+        self._target_repo = target_repo
+
+    async def execute(
+        self,
+        target_id: Annotated[str, Field(description="UUID of the target")],
+        version_id: Annotated[
+            str | None, Field(description="Specific version ID to retrieve (optional)")
+        ] = None,
+        include_history: Annotated[
+            bool, Field(description="Include version history")
+        ] = False,
+    ) -> dict[str, Any]:
+        """Get current or specific context version for a target.
+
+        Args:
+            target_id: UUID of the target
+            version_id: Specific version ID to retrieve (optional)
+            include_history: Include version history
+
+        Returns:
+            Current context and optionally version history
+
+        Raises:
+            ToolError: If retrieval fails or target doesn't exist
+        """
+        if not self._context_repo:
+            raise ToolError(
+                "get_target_context", "Database not configured for context management"
+            )
+
+        if not self._target_repo:
+            raise ToolError(
+                "get_target_context", "Database not configured for target management"
+            )
+
+        try:
+            # Validate UUID format
+            target_uuid = UUID(target_id)
+
+            # Check target exists
+            target = await self._target_repo.get_by_id(target_uuid)
+            if not target:
+                raise ToolError("get_target_context", f"Target not found: {target_id}")
+
+            # Get specific version or current
+            if version_id:
+                context_uuid = UUID(version_id)
+                context = await self._context_repo.get_version(context_uuid)
+                if not context:
+                    raise ToolError(
+                        "get_target_context", f"Context version not found: {version_id}"
+                    )
+            else:
+                context = await self._context_repo.get_current(target_uuid)
+                if not context:
+                    return {
+                        "status": "no_context",
+                        "target_id": target_id,
+                        "message": f"No context found for target {target.host}",
+                    }
+
+            result = {
+                "status": "success",
+                "target_id": str(context.target_id),
+                "context_id": str(context.id),
+                "version": context.version,
+                "user_context": context.user_context,
+                "agent_context": context.agent_context,
+                "created_at": context.created_at.isoformat(),
+                "created_by": context.created_by,
+                "change_type": context.change_type,
+                "change_summary": context.change_summary,
+                "is_major_version": context.is_major_version,
+                "tokens_count": context.tokens_count,
+            }
+
+            # Optionally include history
+            if include_history:
+                history = await self._context_repo.list_versions(target_uuid, limit=10)
+                result["history"] = [
+                    {
+                        "version": h.version,
+                        "context_id": str(h.id),
+                        "created_at": h.created_at.isoformat(),
+                        "created_by": h.created_by,
+                        "change_type": h.change_type,
+                        "change_summary": h.change_summary,
+                        "is_major_version": h.is_major_version,
+                    }
+                    for h in history
+                ]
+
+            return result
+
+        except ToolError:
+            raise
+        except Exception as e:
+            logger.error(f"Failed to get target context: {e}")
+            raise ToolError(
+                "get_target_context", f"Failed to get context: {str(e)}"
+            ) from e
+
+
+class UpdateTargetContextTool:
+    """Tool for updating target context (creates new version)."""
+
+    def __init__(
+        self,
+        context_repo: TargetContextRepository | Any | None = None,
+        target_repo: TargetRepository | Any | None = None,
+    ):
+        """Initialize update context tool.
+
+        Args:
+            context_repo: Repository for managing context versions
+            target_repo: Repository for managing targets
+        """
+        self._context_repo = context_repo
+        self._target_repo = target_repo
+
+    async def execute(
+        self,
+        target_id: Annotated[str, Field(description="UUID of the target")],
+        user_context: Annotated[
+            str | None, Field(description="Updated user context (replaces existing)")
+        ] = None,
+        agent_context: Annotated[
+            str | None, Field(description="Updated agent context (replaces existing)")
+        ] = None,
+        append_mode: Annotated[
+            bool, Field(description="Append to existing context instead of replacing")
+        ] = False,
+        change_summary: Annotated[
+            str | None, Field(description="Summary of what changed")
+        ] = None,
+        is_major_version: Annotated[
+            bool, Field(description="Whether this is a major version")
+        ] = False,
+    ) -> dict[str, Any]:
+        """Update target context (creates new immutable version).
+
+        Args:
+            target_id: UUID of the target
+            user_context: Updated user context (replaces existing unless append_mode)
+            agent_context: Updated agent context (replaces existing unless append_mode)
+            append_mode: Append to existing context instead of replacing
+            change_summary: Summary of what changed
+            is_major_version: Whether this is a major version
+
+        Returns:
+            New context version information
+
+        Raises:
+            ToolError: If update fails or target doesn't exist
+        """
+        if not self._context_repo:
+            raise ToolError(
+                "update_target_context",
+                "Database not configured for context management",
+            )
+
+        if not self._target_repo:
+            raise ToolError(
+                "update_target_context", "Database not configured for target management"
+            )
+
+        try:
+            # Validate UUID format
+            target_uuid = UUID(target_id)
+
+            # Check target exists
+            target = await self._target_repo.get_by_id(target_uuid)
+            if not target:
+                raise ToolError(
+                    "update_target_context", f"Target not found: {target_id}"
+                )
+
+            # Get current context to potentially append to
+            current = await self._context_repo.get_current(target_uuid)
+
+            # Prepare new context values
+            new_user_context = user_context
+            new_agent_context = agent_context
+
+            if append_mode and current:
+                # Append to existing context
+                if user_context:
+                    existing_user = current.user_context or ""
+                    new_user_context = f"{existing_user}\n\n{user_context}".strip()
+                else:
+                    new_user_context = current.user_context
+
+                if agent_context:
+                    existing_agent = current.agent_context or ""
+                    new_agent_context = f"{existing_agent}\n\n{agent_context}".strip()
+                else:
+                    new_agent_context = current.agent_context
+            elif not append_mode and current:
+                # Replace mode but keep unchanged fields
+                if user_context is None:
+                    new_user_context = current.user_context
+                if agent_context is None:
+                    new_agent_context = current.agent_context
+
+            # Determine change type
+            if new_user_context and new_agent_context:
+                created_by = "both"
+                change_type = ContextChangeType.USER_EDIT  # Use USER_EDIT for combined
+            elif new_agent_context:
+                created_by = "agent"
+                change_type = ContextChangeType.AGENT_UPDATE
+            else:
+                created_by = "user"
+                change_type = ContextChangeType.USER_EDIT
+
+            # Create new version
+            context = await self._context_repo.create_version(
+                target_id=target_uuid,
+                user_context=new_user_context,
+                agent_context=new_agent_context,
+                created_by=created_by,
+                change_summary=change_summary
+                or ("Appended context" if append_mode else "Updated context"),
+                change_type=change_type,
+                parent_version_id=current.id if current else None,
+                is_major_version=is_major_version,
+            )
+
+            return {
+                "status": "success",
+                "context_id": str(context.id),
+                "version": context.version,
+                "previous_version": current.version if current else None,
+                "target_id": str(context.target_id),
+                "created_at": context.created_at.isoformat(),
+                "append_mode": append_mode,
+                "message": f"Updated context to version {context.version} for target {target.host}",
+            }
+
+        except ToolError:
+            raise
+        except Exception as e:
+            logger.error(f"Failed to update target context: {e}")
+            raise ToolError(
+                "update_target_context", f"Failed to update context: {str(e)}"
             ) from e

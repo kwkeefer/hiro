@@ -235,16 +235,20 @@ def serve_http(
                 # Create wrapper repositories that will initialize on first use
                 from hiro.db.lazy_repository import (
                     LazyHttpRequestRepository,
+                    LazyTargetContextRepository,
                     LazyTargetRepository,
                 )
 
                 http_repo = LazyHttpRequestRepository(settings.database)
                 target_repo = LazyTargetRepository(settings.database)
+                context_repo = LazyTargetContextRepository(settings.database)
 
                 # Create AI logging provider for target management tools
                 from hiro.servers.ai_logging import AiLoggingToolProvider
 
-                ai_logging_provider = AiLoggingToolProvider(target_repo=target_repo)
+                ai_logging_provider = AiLoggingToolProvider(
+                    target_repo=target_repo, context_repo=context_repo
+                )
 
             except Exception as e:
                 click.echo(f"   Database Logging: Failed to configure - {e}")
@@ -305,6 +309,8 @@ def serve_http(
             click.echo("   • update_target_status - Update target status and metadata")
             click.echo("   • get_target_summary - Get comprehensive target information")
             click.echo("   • search_targets - Search and filter targets")
+            click.echo("   • get_target_context - Retrieve target context and history")
+            click.echo("   • update_target_context - Create or update target context")
 
         if actual_transport == "stdio":
             click.echo(

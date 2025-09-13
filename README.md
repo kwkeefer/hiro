@@ -56,6 +56,104 @@ hiro serve-http --proxy http://127.0.0.1:8080
 make run
 ```
 
+### Database Setup for AI-Assisted Ethical Hacking
+
+The HTTP server includes optional PostgreSQL integration for tracking targets and reconnaissance data. When enabled, all HTTP requests are automatically logged and targets are auto-detected.
+
+#### Quick Setup
+
+1. **Start PostgreSQL** (using Docker):
+   ```bash
+   docker run -d \
+     --name hiro-postgres \
+     -e POSTGRES_PASSWORD=password \
+     -e POSTGRES_DB=hiro \
+     -p 5432:5432 \
+     postgres:16
+   ```
+
+2. **Set DATABASE_URL** and start server:
+   ```bash
+   export DATABASE_URL="postgresql://postgres:password@localhost:5432/hiro"
+   hiro serve-http
+   ```
+
+3. **Initialize database** (first time only):
+   ```bash
+   hiro db init    # Create tables
+   hiro db migrate # Run any pending migrations
+   ```
+
+That's it! The server now auto-logs all HTTP requests and provides AI tools for target management.
+
+#### Available MCP Tools (6 Total)
+
+When database logging is enabled, these MCP tools become available to AI agents:
+
+**Target Management (4 tools):**
+- **`create_target`** - Register a new target to test
+  - Parameters: host, port, protocol, title, status, risk_level, notes
+  - Example: Create target for "example.com" on port 443 with HTTPS
+
+- **`update_target_status`** - Update target progress and metadata
+  - Parameters: target_id, status (active/blocked/completed), risk_level, notes
+  - Example: Mark target as "blocked" after WAF detection
+
+- **`get_target_summary`** - Get detailed information about a target
+  - Parameters: target_id
+  - Returns: Target details, request counts, notes, last activity
+
+- **`search_targets`** - Find targets by various criteria
+  - Parameters: query, status, risk_level, protocol, limit
+  - Example: Find all "active" targets with "high" risk level
+
+**Context Management (2 tools):**
+- **`get_target_context`** - Retrieve findings and notes for a target
+  - Parameters: target_id, include_history (optional)
+  - Returns: Current context/notes, optionally with version history
+
+- **`update_target_context`** - Store new findings about a target
+  - Parameters: target_id, user_context, agent_context, append_mode
+  - Creates new version if no context exists, or updates existing
+  - All changes are versioned for audit trail
+
+#### Example Ethical Hacking Workflow
+
+```python
+# 1. AI creates a target for testing
+create_target(host="testsite.com", port=443, protocol="https",
+              title="Test Site", risk_level="medium")
+
+# 2. AI makes HTTP requests (auto-logged, no tool needed)
+http_request(url="https://testsite.com/admin", method="GET")
+http_request(url="https://testsite.com/api/v1/users", method="GET")
+
+# 3. AI stores findings
+update_target_context(
+    target_id="...",
+    user_context="Found exposed /admin endpoint, returns 403. API endpoint at /api/v1/ appears to be REST.",
+    append_mode=True
+)
+
+# 4. After more testing, AI updates status
+update_target_status(
+    target_id="...",
+    status="blocked",
+    notes="WAF detected and blocking after aggressive scanning"
+)
+
+# 5. AI retrieves all findings later
+get_target_context(target_id="...", include_history=True)
+```
+
+#### Key Features
+
+- **Automatic HTTP Logging**: Every HTTP request is logged to the database transparently
+- **Target Auto-Detection**: Targets are automatically created from HTTP requests
+- **Immutable Versioning**: All context changes create new versions (full audit trail)
+- **Lazy Loading**: Database connection only initialized when needed
+- **Unified Server**: All features integrated into single `serve-http` command
+
 ### Cookie Session Management
 
 The HTTP server includes dynamic cookie session management via MCP resources. This allows the LLM to fetch and use authentication cookies from external files, enabling authenticated HTTP requests.

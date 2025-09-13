@@ -2,15 +2,20 @@
 
 from typing import TYPE_CHECKING, Union
 
-from hiro.db.repositories import TargetRepository
+from hiro.db.repositories import TargetContextRepository, TargetRepository
 
 if TYPE_CHECKING:
-    from hiro.db.lazy_repository import LazyTargetRepository
+    from hiro.db.lazy_repository import (
+        LazyTargetContextRepository,
+        LazyTargetRepository,
+    )
 
 from .tools import (
     CreateTargetTool,
+    GetTargetContextTool,
     GetTargetSummaryTool,
     SearchTargetsTool,
+    UpdateTargetContextTool,
     UpdateTargetStatusTool,
 )
 
@@ -37,15 +42,20 @@ class AiLoggingToolProvider:
     def __init__(
         self,
         target_repo: Union[TargetRepository, "LazyTargetRepository", None] = None,
+        context_repo: Union[
+            TargetContextRepository, "LazyTargetContextRepository", None
+        ] = None,
         session_id: str | None = None,
     ):
         """Initialize with database repositories.
 
         Args:
             target_repo: Repository for managing targets (optional)
+            context_repo: Repository for managing context versions (optional)
             session_id: Current AI session ID for linking operations (optional)
         """
         self._target_repo = target_repo
+        self._context_repo = context_repo
         self._session_id = session_id
 
         # Initialize tools as properties for direct registration
@@ -53,6 +63,14 @@ class AiLoggingToolProvider:
         self._update_target_tool = UpdateTargetStatusTool(target_repo=target_repo)
         self._get_summary_tool = GetTargetSummaryTool(target_repo=target_repo)
         self._search_targets_tool = SearchTargetsTool(target_repo=target_repo)
+
+        # Context management tools (simplified to 2 tools only)
+        self._get_context_tool = GetTargetContextTool(
+            context_repo=context_repo, target_repo=target_repo
+        )
+        self._update_context_tool = UpdateTargetContextTool(
+            context_repo=context_repo, target_repo=target_repo
+        )
 
     @property
     def create_target_tool(self) -> CreateTargetTool:
@@ -73,3 +91,13 @@ class AiLoggingToolProvider:
     def search_targets_tool(self) -> SearchTargetsTool:
         """Access to search targets tool for direct registration."""
         return self._search_targets_tool
+
+    @property
+    def get_context_tool(self) -> GetTargetContextTool:
+        """Access to get context tool for direct registration."""
+        return self._get_context_tool
+
+    @property
+    def update_context_tool(self) -> UpdateTargetContextTool:
+        """Access to update context tool for direct registration."""
+        return self._update_context_tool

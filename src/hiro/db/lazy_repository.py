@@ -10,7 +10,12 @@ from sqlalchemy.ext.asyncio.session import async_sessionmaker
 from hiro.core.config.settings import DatabaseSettings
 
 from .connection import get_session_factory, initialize_database
-from .repositories import HttpRequestRepository, TargetRepository
+from .models import ContextChangeType
+from .repositories import (
+    HttpRequestRepository,
+    TargetContextRepository,
+    TargetRepository,
+)
 from .schemas import (
     HttpRequestCreate,
     HttpRequestUpdate,
@@ -174,3 +179,105 @@ class LazyTargetRepository:
         """Get target summary with related data counts."""
         repo = await self._ensure_initialized()
         return await repo.get_summary(target_id)
+
+
+class LazyTargetContextRepository:
+    """Lazy wrapper for TargetContextRepository that initializes on first use."""
+
+    def __init__(self, db_settings: DatabaseSettings):
+        self._db_settings = db_settings
+        self._real_repo: TargetContextRepository | None = None
+        self._initialized = False
+        self._init_lock = asyncio.Lock()
+        # Share the session factory with other repositories if possible
+        self._shared_session_factory: async_sessionmaker[AsyncSession] | None = None
+
+    async def _ensure_initialized(self) -> TargetContextRepository:
+        """Ensure the repository is initialized in the current event loop."""
+        if self._initialized and self._real_repo:
+            return self._real_repo
+
+        async with self._init_lock:
+            # Double-check after acquiring lock
+            if self._initialized and self._real_repo:
+                return self._real_repo
+
+            try:
+                logger.debug(
+                    "Initializing database connection for TargetContextRepository"
+                )
+                # Check if database is already initialized
+                session_factory = get_session_factory()
+                if not session_factory:
+                    # Initialize database in the current event loop
+                    initialize_database(self._db_settings)
+                    session_factory = get_session_factory()
+
+                # Test the connection
+                async with session_factory() as session:
+                    from sqlalchemy import text
+
+                    await session.execute(text("SELECT 1"))
+                    await session.commit()
+
+                # Create the real repository with the session factory
+                self._real_repo = TargetContextRepository(session_factory)
+                self._initialized = True
+                logger.info("TargetContextRepository initialized successfully")
+                return self._real_repo
+            except Exception as e:
+                logger.error(
+                    f"Failed to initialize TargetContextRepository: {e}", exc_info=True
+                )
+                raise
+
+    async def create_version(
+        self,
+        target_id: Any,
+        user_context: str | None = None,
+        agent_context: str | None = None,
+        created_by: str = "user",
+        change_summary: str | None = None,
+        change_type: ContextChangeType = ContextChangeType.USER_EDIT,
+        parent_version_id: Any | None = None,
+        is_major_version: bool = False,
+    ) -> Any:
+        """Create a new immutable context version."""
+        repo = await self._ensure_initialized()
+        return await repo.create_version(
+            target_id=target_id,
+            user_context=user_context,
+            agent_context=agent_context,
+            created_by=created_by,
+            change_summary=change_summary,
+            change_type=change_type,
+            parent_version_id=parent_version_id,
+            is_major_version=is_major_version,
+        )
+
+    async def get_current(self, target_id: Any) -> Any:
+        """Get current context version for a target."""
+        repo = await self._ensure_initialized()
+        return await repo.get_current(target_id)
+
+    async def get_version(self, context_id: Any) -> Any:
+        """Get specific context version."""
+        repo = await self._ensure_initialized()
+        return await repo.get_version(context_id)
+
+    async def list_versions(
+        self, target_id: Any, limit: int = 10, offset: int = 0
+    ) -> Any:
+        """Get version history for a target."""
+        repo = await self._ensure_initialized()
+        return await repo.list_versions(target_id, limit, offset)
+
+    async def search_contexts(
+        self,
+        query_text: str,
+        target_ids: list[Any] | None = None,
+        limit: int = 50,
+    ) -> Any:
+        """Full-text search across context fields."""
+        repo = await self._ensure_initialized()
+        return await repo.search_contexts(query_text, target_ids, limit)
