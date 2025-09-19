@@ -2,6 +2,7 @@
 
 import asyncio
 import functools
+from pathlib import Path
 
 import click
 from alembic import command
@@ -17,6 +18,7 @@ from hiro.db import initialize_database, test_connection
 from hiro.db.models import Base
 from hiro.servers.http.config import HttpConfig
 from hiro.servers.http.providers import HttpToolProvider
+from hiro.utils.xdg import get_cookie_sessions_config_path, get_cookies_data_dir
 
 
 class DatabaseCommandRunner:
@@ -485,6 +487,345 @@ async def status(runner: DatabaseCommandRunner) -> None:
         click.echo(f"Current revision: {current_rev}")
     else:
         click.echo("No migrations have been run yet")
+
+
+@cli.group()
+def cookies() -> None:
+    """Cookie session management commands."""
+    pass
+
+
+@cookies.command()
+def init() -> None:
+    """Initialize cookie sessions configuration directory and example config."""
+    import shutil
+    import yaml
+
+    config_path = get_cookie_sessions_config_path()
+    cookies_dir = get_cookies_data_dir()
+
+    # Create directories
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    cookies_dir.mkdir(parents=True, exist_ok=True)
+
+    if config_path.exists():
+        click.echo(f"⚠️  Configuration already exists: {config_path}")
+        if not click.confirm("Overwrite existing configuration?"):
+            return
+
+    # Create example configuration
+    example_config = {
+        "version": "1.0",
+        "sessions": {
+            "example_session": {
+                "description": "Example cookie session",
+                "cookie_file": "example_session.json",
+                "cache_ttl": 3600,
+                "metadata": {
+                    "domains": ["example.com"],
+                    "account_type": "example"
+                }
+            }
+        }
+    }
+
+    # Write configuration
+    with config_path.open("w") as f:
+        yaml.dump(example_config, f, default_flow_style=False, indent=2)
+
+    # Create example cookie file
+    example_cookies_path = cookies_dir / "example_session.json"
+    if not example_cookies_path.exists():
+        import json
+        example_cookies = {
+            "session_id": "example_session_id_123",
+            "auth_token": "example_auth_token_456"
+        }
+        with example_cookies_path.open("w") as f:
+            json.dump(example_cookies, f, indent=2)
+        # Set proper permissions
+        example_cookies_path.chmod(0o600)
+
+    click.echo(f"✅ Cookie sessions initialized:")
+    click.echo(f"   Configuration: {config_path}")
+    click.echo(f"   Cookie files: {cookies_dir}")
+    click.echo(f"\n📝 Edit {config_path} to add your cookie sessions")
+
+
+@cookies.command()
+def list() -> None:
+    """List all configured cookie sessions."""
+    import yaml
+
+    config_path = get_cookie_sessions_config_path()
+
+    if not config_path.exists():
+        click.echo("❌ Cookie sessions not configured")
+        click.echo(f"Run 'hiro cookies init' to create: {config_path}")
+        return
+
+    try:
+        with config_path.open("r") as f:
+            config = yaml.safe_load(f)
+
+        if not config or "sessions" not in config:
+            click.echo("📝 No sessions configured")
+            return
+
+        click.echo("🍪 Cookie Sessions:")
+        for name, session_config in config["sessions"].items():
+            click.echo(f"   {name}")
+            click.echo(f"      Description: {session_config.get('description', 'N/A')}")
+            click.echo(f"      Cookie file: {session_config.get('cookie_file', 'N/A')}")
+            click.echo(f"      Cache TTL: {session_config.get('cache_ttl', 60)}s")
+
+            # Check if cookie file exists
+            from hiro.servers.http.cookie_sessions import CookieSession
+            try:
+                session = CookieSession(
+                    name=name,
+                    description=session_config.get("description", ""),
+                    cookie_file=Path(session_config["cookie_file"]),
+                    cache_ttl=session_config.get("cache_ttl", 60)
+                )
+                cookie_path = session.expand_cookie_path()
+                if cookie_path.exists():
+                    click.echo(f"      Status: ✅ Cookie file exists")
+                else:
+                    click.echo(f"      Status: ❌ Cookie file missing: {cookie_path}")
+            except Exception as e:
+                click.echo(f"      Status: ❌ Error: {e}")
+            click.echo()
+
+    except Exception as e:
+        click.echo(f"❌ Error reading configuration: {e}")
+
+
+@cookies.command()
+@click.argument("session_name")
+def show(session_name: str) -> None:
+    """Show details for a specific cookie session."""
+    import yaml
+    import json
+
+    config_path = get_cookie_sessions_config_path()
+
+    if not config_path.exists():
+        click.echo("❌ Cookie sessions not configured")
+        return
+
+    try:
+        with config_path.open("r") as f:
+            config = yaml.safe_load(f)
+
+        if not config or "sessions" not in config or session_name not in config["sessions"]:
+            click.echo(f"❌ Session '{session_name}' not found")
+            return
+
+        session_config = config["sessions"][session_name]
+
+        # Create session object to handle path expansion
+        from hiro.servers.http.cookie_sessions import CookieSession
+        session = CookieSession(
+            name=session_name,
+            description=session_config.get("description", ""),
+            cookie_file=Path(session_config["cookie_file"]),
+            cache_ttl=session_config.get("cache_ttl", 60),
+            metadata=session_config.get("metadata", {})
+        )
+
+        click.echo(f"🍪 Cookie Session: {session_name}")
+        click.echo(f"   Description: {session.description}")
+        click.echo(f"   Cookie file: {session_config['cookie_file']}")
+
+        cookie_path = session.expand_cookie_path()
+        click.echo(f"   Resolved path: {cookie_path}")
+        click.echo(f"   Cache TTL: {session.cache_ttl}s")
+
+        # Show metadata
+        if session.metadata:
+            click.echo("   Metadata:")
+            for key, value in session.metadata.items():
+                click.echo(f"      {key}: {value}")
+
+        # Try to read cookie file
+        if cookie_path.exists():
+            try:
+                # Check permissions
+                stat_info = cookie_path.stat()
+                file_mode = stat_info.st_mode & 0o777
+                click.echo(f"   File permissions: {oct(file_mode)}")
+
+                if file_mode not in (0o600, 0o400):
+                    click.echo(f"   ⚠️  Warning: Insecure permissions! Should be 0600 or 0400")
+
+                # Read cookies
+                with cookie_path.open("r") as f:
+                    cookies = json.load(f)
+
+                click.echo(f"   Cookie count: {len(cookies)}")
+                click.echo("   Cookie keys:")
+                for key in cookies.keys():
+                    click.echo(f"      • {key}")
+
+            except Exception as e:
+                click.echo(f"   ❌ Error reading cookies: {e}")
+        else:
+            click.echo("   ❌ Cookie file does not exist")
+
+    except Exception as e:
+        click.echo(f"❌ Error: {e}")
+
+
+@cookies.command()
+@click.argument("session_name")
+@click.option("--description", "-d", help="Session description")
+@click.option("--cookie-file", "-f", required=True, help="Path to cookie file (relative to cookies dir or absolute)")
+@click.option("--cache-ttl", "-t", default=3600, type=int, help="Cache TTL in seconds")
+@click.option("--domains", help="Comma-separated list of domains this session is used for")
+def add(session_name: str, description: str, cookie_file: str, cache_ttl: int, domains: str | None) -> None:
+    """Add a new cookie session configuration."""
+    import yaml
+
+    config_path = get_cookie_sessions_config_path()
+
+    # Create config directory if needed
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Load existing config or create new
+    config = {"version": "1.0", "sessions": {}}
+    if config_path.exists():
+        try:
+            with config_path.open("r") as f:
+                config = yaml.safe_load(f) or config
+        except Exception as e:
+            click.echo(f"❌ Error reading existing config: {e}")
+            return
+
+    # Check if session already exists
+    if session_name in config.get("sessions", {}):
+        click.echo(f"❌ Session '{session_name}' already exists")
+        if not click.confirm("Overwrite?"):
+            return
+
+    # Create session config
+    session_config = {
+        "description": description or f"Cookie session: {session_name}",
+        "cookie_file": cookie_file,
+        "cache_ttl": cache_ttl
+    }
+
+    # Add metadata if domains provided
+    if domains:
+        domain_list = [d.strip() for d in domains.split(",") if d.strip()]
+        if domain_list:
+            session_config["metadata"] = {"domains": domain_list}
+
+    # Add to config
+    if "sessions" not in config:
+        config["sessions"] = {}
+    config["sessions"][session_name] = session_config
+
+    # Write config
+    try:
+        with config_path.open("w") as f:
+            yaml.dump(config, f, default_flow_style=False, indent=2)
+
+        click.echo(f"✅ Added session '{session_name}'")
+        click.echo(f"   Cookie file: {cookie_file}")
+        click.echo(f"   Cache TTL: {cache_ttl}s")
+        if domains:
+            click.echo(f"   Domains: {domains}")
+
+        # Remind about cookie file
+        from hiro.servers.http.cookie_sessions import CookieSession
+        session = CookieSession(
+            name=session_name,
+            description=session_config["description"],
+            cookie_file=Path(cookie_file)
+        )
+        cookie_path = session.expand_cookie_path()
+
+        if not cookie_path.exists():
+            click.echo(f"\n📝 Don't forget to create the cookie file: {cookie_path}")
+            click.echo("   Example: echo '{}' > {}")
+
+    except Exception as e:
+        click.echo(f"❌ Error saving configuration: {e}")
+
+
+@cookies.command()
+@click.argument("session_name")
+def remove(session_name: str) -> None:
+    """Remove a cookie session configuration."""
+    import yaml
+
+    config_path = get_cookie_sessions_config_path()
+
+    if not config_path.exists():
+        click.echo("❌ Cookie sessions not configured")
+        return
+
+    try:
+        with config_path.open("r") as f:
+            config = yaml.safe_load(f)
+
+        if not config or "sessions" not in config or session_name not in config["sessions"]:
+            click.echo(f"❌ Session '{session_name}' not found")
+            return
+
+        # Confirm removal
+        if not click.confirm(f"Remove session '{session_name}'?"):
+            return
+
+        # Remove session
+        del config["sessions"][session_name]
+
+        # Write updated config
+        with config_path.open("w") as f:
+            yaml.dump(config, f, default_flow_style=False, indent=2)
+
+        click.echo(f"✅ Removed session '{session_name}'")
+
+    except Exception as e:
+        click.echo(f"❌ Error: {e}")
+
+
+@cookies.command()
+@click.argument("session_name")
+def test(session_name: str) -> None:
+    """Test cookie file access for a session."""
+    from hiro.servers.http.cookie_sessions import CookieSessionProvider
+
+    try:
+        provider = CookieSessionProvider()
+
+        # Check if session exists
+        if session_name not in provider.sessions:
+            click.echo(f"❌ Session '{session_name}' not found")
+            available = list(provider.sessions.keys())
+            if available:
+                click.echo(f"Available sessions: {', '.join(available)}")
+            return
+
+        # Test accessing the session
+        click.echo(f"🧪 Testing session '{session_name}'...")
+
+        session = provider.sessions[session_name]
+        result = session.get_cookies()
+
+        if "error" in result:
+            click.echo(f"❌ Error: {result['error']}")
+        else:
+            click.echo("✅ Session access successful")
+            click.echo(f"   Cookie count: {len(result['cookies'])}")
+            click.echo(f"   From cache: {result.get('from_cache', False)}")
+            click.echo(f"   Last updated: {result.get('last_updated', 'N/A')}")
+            if result.get('file_modified'):
+                click.echo(f"   File modified: {result['file_modified']}")
+
+    except Exception as e:
+        click.echo(f"❌ Error testing session: {e}")
 
 
 @cli.command()
