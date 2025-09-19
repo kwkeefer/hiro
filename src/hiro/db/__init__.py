@@ -1,6 +1,7 @@
 """Database module for hiro."""
 
 from .connection import (
+    auto_migrate_database,
     close_database,
     get_db_session,
     get_session_factory,
@@ -82,6 +83,7 @@ from .schemas import (
 __all__ = [
     # Connection management
     "initialize_database",
+    "auto_migrate_database",
     "close_database",
     "get_db_session",
     "get_session_factory",

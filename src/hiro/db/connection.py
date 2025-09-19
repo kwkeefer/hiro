@@ -112,3 +112,55 @@ async def test_connection(settings: DatabaseSettings) -> bool:
     except Exception as e:
         logger.error(f"Database connection test failed: {e}")
         return False
+
+
+async def auto_migrate_database(settings: DatabaseSettings) -> bool:
+    """
+    Automatically run database migrations if needed.
+
+    This ensures the database schema is up-to-date without requiring
+    manual intervention. Safe to call multiple times.
+
+    Returns:
+        bool: True if migrations were successful or not needed, False on error
+    """
+    from pathlib import Path
+
+    from alembic import command
+    from alembic.config import Config
+
+    try:
+        # Test connection first
+        if not await test_connection(settings):
+            logger.error("Cannot migrate: database connection failed")
+            return False
+
+        # Initialize database engine if not already done
+        if _engine is None:
+            initialize_database(settings)
+
+        # Find alembic.ini - look in current directory and parent directories
+        alembic_ini = None
+        for path in [
+            Path.cwd(),
+            Path.cwd().parent,
+            Path(__file__).parent.parent.parent,
+        ]:
+            candidate = path / "alembic.ini"
+            if candidate.exists():
+                alembic_ini = str(candidate)
+                break
+
+        if not alembic_ini:
+            logger.error("Could not find alembic.ini configuration file")
+            return False
+
+        logger.info("Running database migrations...")
+        alembic_cfg = Config(alembic_ini)
+        command.upgrade(alembic_cfg, "head")
+        logger.info("Database migrations completed successfully")
+        return True
+
+    except Exception as e:
+        logger.error(f"Auto-migration failed: {e}")
+        return False

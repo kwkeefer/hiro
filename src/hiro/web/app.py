@@ -10,6 +10,8 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from hiro.core.config.settings import get_settings
+from hiro.db import auto_migrate_database
 from hiro.web.routers import api, targets
 
 logger = logging.getLogger(__name__)
@@ -24,6 +26,20 @@ STATIC_DIR = BASE_DIR / "static"
 async def lifespan(app: FastAPI):  # noqa: ARG001
     """Manage application lifecycle."""
     logger.info("Starting hiro web interface...")
+
+    # Auto-migrate database if configured
+    try:
+        settings = get_settings()
+        if settings.database.url:
+            logger.info("Checking database schema...")
+            success = await auto_migrate_database(settings.database)
+            if not success:
+                logger.warning("Database auto-migration failed, but continuing startup")
+        else:
+            logger.info("Database not configured, skipping auto-migration")
+    except Exception as e:
+        logger.warning(f"Database auto-migration error: {e}, continuing startup")
+
     yield
     logger.info("Shutting down hiro web interface...")
 

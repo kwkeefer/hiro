@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio.session import async_sessionmaker
 
 from hiro.core.config.settings import DatabaseSettings
 
-from .connection import get_session_factory, initialize_database
+from .connection import auto_migrate_database, get_session_factory, initialize_database
 from .models import ContextChangeType
 from .repositories import (
     HttpRequestRepository,
@@ -50,8 +50,13 @@ class LazyHttpRequestRepository:
                 logger.debug(
                     "Initializing database connection for HttpRequestRepository"
                 )
-                # Initialize database in the current event loop
-                initialize_database(self._db_settings)
+                # Initialize database with auto-migration
+                success = await auto_migrate_database(self._db_settings)
+                if not success:
+                    logger.warning(
+                        "Auto-migration failed, falling back to basic initialization"
+                    )
+                    initialize_database(self._db_settings)
                 session_factory = get_session_factory()
 
                 # Test the connection
@@ -118,8 +123,13 @@ class LazyTargetRepository:
                     logger.debug("Reusing existing session factory")
                 except RuntimeError:
                     # Database not initialized yet, initialize it now
-                    logger.debug("Initializing database")
-                    initialize_database(self._db_settings)
+                    logger.debug("Initializing database with auto-migration")
+                    success = await auto_migrate_database(self._db_settings)
+                    if not success:
+                        logger.warning(
+                            "Auto-migration failed, falling back to basic initialization"
+                        )
+                        initialize_database(self._db_settings)
                     session_factory = get_session_factory()
 
                 # Test the connection

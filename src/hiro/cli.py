@@ -471,7 +471,18 @@ async def init(runner: DatabaseCommandRunner, drop_existing: bool) -> None:
         await engine.dispose()
 
     initialize_database(runner.settings.database)
-    click.echo("✅ Database initialized successfully")
+    click.echo("✅ Database engine initialized")
+
+    # Run Alembic migrations to create tables
+    click.echo("🔄 Running database migrations...")
+    try:
+        alembic_cfg = runner.get_alembic_config()
+        command.upgrade(alembic_cfg, "head")
+        click.echo("✅ Database migrations completed")
+        click.echo("✅ Database initialization completed successfully")
+    except Exception as e:
+        click.echo(f"❌ Migration failed: {e}")
+        raise click.Abort() from e
 
 
 @db.command()
