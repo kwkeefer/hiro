@@ -3,6 +3,7 @@
 import asyncio
 import functools
 from pathlib import Path
+from typing import Any
 
 import click
 from alembic import command
@@ -18,6 +19,7 @@ from hiro.db import initialize_database, test_connection
 from hiro.db.models import Base
 from hiro.servers.http.config import HttpConfig
 from hiro.servers.http.providers import HttpToolProvider
+from hiro.servers.prompts import PromptResourceProvider
 from hiro.utils.xdg import get_cookie_sessions_config_path, get_cookies_data_dir
 
 
@@ -294,6 +296,20 @@ def serve_http(
             cookie_sessions_config=None,  # Use XDG default location
         )
 
+        # Initialize cookie provider first if enabled (needed by HTTP tools)
+        cookie_provider = None
+        if http_config.cookie_sessions_enabled:
+            try:
+                from hiro.servers.http.cookie_sessions import CookieSessionProvider
+
+                cookie_provider = CookieSessionProvider(
+                    http_config.cookie_sessions_config
+                )
+                click.echo("   Cookie Sessions: Enabled (MCP resources)")
+            except Exception as e:
+                click.echo(f"   Cookie Sessions: Failed to initialize - {e}")
+                cookie_provider = None
+
         # Initialize database repositories if logging is enabled
         http_repo = None
         target_repo = None
@@ -330,9 +346,12 @@ def serve_http(
                 target_repo = None
                 ai_logging_provider = None
 
-        # Create HTTP tool provider with injected config and repositories
+        # Create HTTP tool provider with injected config, repositories, and cookie provider
         http_provider = HttpToolProvider(
-            http_config, http_repo=http_repo, target_repo=target_repo
+            http_config,
+            http_repo=http_repo,
+            target_repo=target_repo,
+            cookie_provider=cookie_provider,
         )
 
         # Initialize SINGLE unified server and add all tool providers
@@ -347,18 +366,19 @@ def serve_http(
         if ai_logging_provider:
             server.add_tool_provider(ai_logging_provider)
 
-        # Add cookie session resources if enabled
-        if http_config.cookie_sessions_enabled:
-            try:
-                from hiro.servers.http.cookie_sessions import CookieSessionProvider
+        # Add cookie session resources if provider was created
+        if cookie_provider:
+            server.add_resource_provider(cookie_provider)
 
-                cookie_provider = CookieSessionProvider(
-                    http_config.cookie_sessions_config
-                )
-                server.add_resource_provider(cookie_provider)
-                click.echo("   Cookie Sessions: Enabled (MCP resources)")
-            except Exception as e:
-                click.echo(f"   Cookie Sessions: Failed to initialize - {e}")
+        # Add prompt guides resources
+        prompt_provider = None
+        try:
+            prompt_provider = PromptResourceProvider()
+            server.add_resource_provider(prompt_provider)
+            prompts = prompt_provider.list_prompts()
+            click.echo(f"   Prompt Guides: Enabled ({len(prompts)} guides loaded)")
+        except Exception as e:
+            click.echo(f"   Prompt Guides: Failed to initialize - {e}")
 
         # Show configuration
         click.echo(f"🚀 Starting {http_settings.server_name} MCP Server")
@@ -376,7 +396,9 @@ def serve_http(
 
         # Show available tools
         click.echo("\n📦 Available Tools:")
-        click.echo("   • http_request - Make HTTP requests with full control")
+        click.echo(
+            "   • http_request - Make HTTP requests with full control (supports cookie profiles)"
+        )
         if ai_logging_provider:
             click.echo("   • create_target - Register new targets for testing")
             click.echo("   • update_target_status - Update target status and metadata")
@@ -384,6 +406,20 @@ def serve_http(
             click.echo("   • search_targets - Search and filter targets")
             click.echo("   • get_target_context - Retrieve target context and history")
             click.echo("   • update_target_context - Create or update target context")
+
+        # Show available resources
+        if cookie_provider or prompt_provider:
+            click.echo("\n📚 Available Resources:")
+
+        if cookie_provider:
+            click.echo(
+                "   • cookie-session:// - Pre-configured authentication sessions"
+            )
+
+        if prompt_provider:
+            prompts = prompt_provider.list_prompts()
+            for prompt_id in prompts:
+                click.echo(f"   • prompt://{prompt_id} - Guide/prompt resource")
 
         if actual_transport == "stdio":
             click.echo(
@@ -495,10 +531,9 @@ def cookies() -> None:
     pass
 
 
-@cookies.command()
-def init() -> None:
+@cookies.command(name="init")
+def init_cookies() -> None:
     """Initialize cookie sessions configuration directory and example config."""
-    import shutil
     import yaml
 
     config_path = get_cookie_sessions_config_path()
@@ -521,12 +556,9 @@ def init() -> None:
                 "description": "Example cookie session",
                 "cookie_file": "example_session.json",
                 "cache_ttl": 3600,
-                "metadata": {
-                    "domains": ["example.com"],
-                    "account_type": "example"
-                }
+                "metadata": {"domains": ["example.com"], "account_type": "example"},
             }
-        }
+        },
     }
 
     # Write configuration
@@ -537,16 +569,17 @@ def init() -> None:
     example_cookies_path = cookies_dir / "example_session.json"
     if not example_cookies_path.exists():
         import json
+
         example_cookies = {
             "session_id": "example_session_id_123",
-            "auth_token": "example_auth_token_456"
+            "auth_token": "example_auth_token_456",
         }
         with example_cookies_path.open("w") as f:
             json.dump(example_cookies, f, indent=2)
         # Set proper permissions
         example_cookies_path.chmod(0o600)
 
-    click.echo(f"✅ Cookie sessions initialized:")
+    click.echo("✅ Cookie sessions initialized:")
     click.echo(f"   Configuration: {config_path}")
     click.echo(f"   Cookie files: {cookies_dir}")
     click.echo(f"\n📝 Edit {config_path} to add your cookie sessions")
@@ -581,16 +614,17 @@ def list() -> None:
 
             # Check if cookie file exists
             from hiro.servers.http.cookie_sessions import CookieSession
+
             try:
                 session = CookieSession(
                     name=name,
                     description=session_config.get("description", ""),
                     cookie_file=Path(session_config["cookie_file"]),
-                    cache_ttl=session_config.get("cache_ttl", 60)
+                    cache_ttl=session_config.get("cache_ttl", 60),
                 )
                 cookie_path = session.expand_cookie_path()
                 if cookie_path.exists():
-                    click.echo(f"      Status: ✅ Cookie file exists")
+                    click.echo("      Status: ✅ Cookie file exists")
                 else:
                     click.echo(f"      Status: ❌ Cookie file missing: {cookie_path}")
             except Exception as e:
@@ -605,8 +639,9 @@ def list() -> None:
 @click.argument("session_name")
 def show(session_name: str) -> None:
     """Show details for a specific cookie session."""
-    import yaml
     import json
+
+    import yaml
 
     config_path = get_cookie_sessions_config_path()
 
@@ -618,7 +653,11 @@ def show(session_name: str) -> None:
         with config_path.open("r") as f:
             config = yaml.safe_load(f)
 
-        if not config or "sessions" not in config or session_name not in config["sessions"]:
+        if (
+            not config
+            or "sessions" not in config
+            or session_name not in config["sessions"]
+        ):
             click.echo(f"❌ Session '{session_name}' not found")
             return
 
@@ -626,12 +665,13 @@ def show(session_name: str) -> None:
 
         # Create session object to handle path expansion
         from hiro.servers.http.cookie_sessions import CookieSession
+
         session = CookieSession(
             name=session_name,
             description=session_config.get("description", ""),
             cookie_file=Path(session_config["cookie_file"]),
             cache_ttl=session_config.get("cache_ttl", 60),
-            metadata=session_config.get("metadata", {})
+            metadata=session_config.get("metadata", {}),
         )
 
         click.echo(f"🍪 Cookie Session: {session_name}")
@@ -657,7 +697,9 @@ def show(session_name: str) -> None:
                 click.echo(f"   File permissions: {oct(file_mode)}")
 
                 if file_mode not in (0o600, 0o400):
-                    click.echo(f"   ⚠️  Warning: Insecure permissions! Should be 0600 or 0400")
+                    click.echo(
+                        "   ⚠️  Warning: Insecure permissions! Should be 0600 or 0400"
+                    )
 
                 # Read cookies
                 with cookie_path.open("r") as f:
@@ -665,7 +707,7 @@ def show(session_name: str) -> None:
 
                 click.echo(f"   Cookie count: {len(cookies)}")
                 click.echo("   Cookie keys:")
-                for key in cookies.keys():
+                for key in cookies:
                     click.echo(f"      • {key}")
 
             except Exception as e:
@@ -680,10 +722,23 @@ def show(session_name: str) -> None:
 @cookies.command()
 @click.argument("session_name")
 @click.option("--description", "-d", help="Session description")
-@click.option("--cookie-file", "-f", required=True, help="Path to cookie file (relative to cookies dir or absolute)")
+@click.option(
+    "--cookie-file",
+    "-f",
+    required=True,
+    help="Path to cookie file (relative to cookies dir or absolute)",
+)
 @click.option("--cache-ttl", "-t", default=3600, type=int, help="Cache TTL in seconds")
-@click.option("--domains", help="Comma-separated list of domains this session is used for")
-def add(session_name: str, description: str, cookie_file: str, cache_ttl: int, domains: str | None) -> None:
+@click.option(
+    "--domains", help="Comma-separated list of domains this session is used for"
+)
+def add(
+    session_name: str,
+    description: str,
+    cookie_file: str,
+    cache_ttl: int,
+    domains: str | None,
+) -> None:
     """Add a new cookie session configuration."""
     import yaml
 
@@ -693,11 +748,13 @@ def add(session_name: str, description: str, cookie_file: str, cache_ttl: int, d
     config_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Load existing config or create new
-    config = {"version": "1.0", "sessions": {}}
+    config: dict[str, Any] = {"version": "1.0", "sessions": {}}
     if config_path.exists():
         try:
             with config_path.open("r") as f:
-                config = yaml.safe_load(f) or config
+                loaded_config = yaml.safe_load(f)
+                if loaded_config and isinstance(loaded_config, dict):
+                    config = loaded_config
         except Exception as e:
             click.echo(f"❌ Error reading existing config: {e}")
             return
@@ -712,7 +769,7 @@ def add(session_name: str, description: str, cookie_file: str, cache_ttl: int, d
     session_config = {
         "description": description or f"Cookie session: {session_name}",
         "cookie_file": cookie_file,
-        "cache_ttl": cache_ttl
+        "cache_ttl": cache_ttl,
     }
 
     # Add metadata if domains provided
@@ -739,10 +796,11 @@ def add(session_name: str, description: str, cookie_file: str, cache_ttl: int, d
 
         # Remind about cookie file
         from hiro.servers.http.cookie_sessions import CookieSession
+
         session = CookieSession(
             name=session_name,
-            description=session_config["description"],
-            cookie_file=Path(cookie_file)
+            description=str(session_config["description"]),
+            cookie_file=Path(cookie_file),
         )
         cookie_path = session.expand_cookie_path()
 
@@ -770,7 +828,11 @@ def remove(session_name: str) -> None:
         with config_path.open("r") as f:
             config = yaml.safe_load(f)
 
-        if not config or "sessions" not in config or session_name not in config["sessions"]:
+        if (
+            not config
+            or "sessions" not in config
+            or session_name not in config["sessions"]
+        ):
             click.echo(f"❌ Session '{session_name}' not found")
             return
 
@@ -821,7 +883,7 @@ def test(session_name: str) -> None:
             click.echo(f"   Cookie count: {len(result['cookies'])}")
             click.echo(f"   From cache: {result.get('from_cache', False)}")
             click.echo(f"   Last updated: {result.get('last_updated', 'N/A')}")
-            if result.get('file_modified'):
+            if result.get("file_modified"):
                 click.echo(f"   File modified: {result['file_modified']}")
 
     except Exception as e:

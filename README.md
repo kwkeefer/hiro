@@ -4,7 +4,15 @@ Getting started with MCP stuff
 
 ## Features
 
+### Core Capabilities
 - Modern Python 3.12 project with src layout
+- MCP (Model Context Protocol) server implementation
+- HTTP request tools with proxy support (Burp Suite, OWASP ZAP integration)
+- Database-backed target and context management
+- Cookie session/profile management for authenticated testing
+- Prompt resource system for LLM agent guidance
+
+### Development Tools
 - Dependency management with [uv](https://github.com/astral-sh/uv)
 - Testing with pytest
 - Code formatting with ruff
@@ -13,7 +21,6 @@ Getting started with MCP stuff
 - Docker support for containerization
 - GitHub Actions for CI/CD
 - Pre-commit hooks for code quality
-- Claude Code agents for automated code review
 
 ## Installation
 
@@ -156,7 +163,27 @@ get_target_context(target_id="...", include_history=True)
 
 ### Cookie Session Management
 
-The HTTP server includes dynamic cookie session management via MCP resources. This allows the LLM to fetch and use authentication cookies from external files, enabling authenticated HTTP requests.
+The HTTP server includes two cookie management features:
+
+1. **Cookie Profiles in HTTP Requests**: Pass `cookie_profile` parameter to automatically load cookies from pre-configured sessions
+2. **Dynamic Cookie Resources**: MCP resources that provide authentication cookies to LLM agents
+
+#### Using Cookie Profiles in Requests
+
+```python
+# Use a pre-configured cookie session
+http_request(
+    url="https://api.example.com/protected",
+    cookie_profile="admin_session"  # Automatically loads cookies from profile
+)
+
+# Override specific cookies while using a profile
+http_request(
+    url="https://api.example.com/data",
+    cookie_profile="admin_session",
+    cookies='{"extra_token": "xyz"}'  # Manual cookies take precedence
+)
+```
 
 #### Setup
 
@@ -237,6 +264,47 @@ update_cookies("github_personal", cookies)
 ```
 
 See `cookie_sessions.yaml.example` for a complete configuration example.
+
+### Prompt Resource System
+
+The server provides structured guidance to LLM agents through MCP prompt resources. These guides help agents understand how to use the tools effectively while emphasizing that user instructions always take precedence.
+
+#### Built-in Guides
+
+- **`prompt://tool_usage_guide`** - Comprehensive guide explaining all tools and their parameters
+- **`prompt://quickstart`** - Quick reference for getting started
+- **`prompt://context_patterns`** - Best practices for documenting findings
+
+#### Accessing Prompts
+
+LLM agents can fetch prompts in multiple formats:
+
+```python
+# Get as JSON (default)
+ReadMcpResource("prompt://tool_usage_guide")
+
+# Get as YAML
+ReadMcpResource("prompt://tool_usage_guide?format=yaml")
+
+# Get as Markdown
+ReadMcpResource("prompt://tool_usage_guide?format=markdown")
+```
+
+#### Custom Prompts
+
+Add your own prompts to `~/.config/hiro/prompts/`:
+
+```yaml
+# ~/.config/hiro/prompts/my_workflow.yaml
+name: "Custom Testing Workflow"
+version: "1.0"
+description: "Organization-specific testing methodology"
+role: |
+  You are testing according to our company standards.
+  Always check for these specific vulnerabilities...
+```
+
+Custom prompts override built-in prompts with the same filename. Set `HIRO_PROMPTS_DIR` environment variable to use a different directory.
 
 ### As a Library
 

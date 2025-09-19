@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     )
 
 from .config import HttpConfig
+from .cookie_sessions import CookieSessionProvider
 from .tools import HttpRequestTool
 
 
@@ -35,6 +36,7 @@ class HttpToolProvider:
         ] = None,
         target_repo: Union[TargetRepository, "LazyTargetRepository", None] = None,
         session_id: str | None = None,
+        cookie_provider: CookieSessionProvider | None = None,
     ):
         """Initialize with server configuration and optional database repositories.
 
@@ -43,16 +45,19 @@ class HttpToolProvider:
             http_repo: Repository for logging HTTP requests (optional)
             target_repo: Repository for managing targets (optional)
             session_id: Current AI session ID for linking requests (optional)
+            cookie_provider: Provider for cookie sessions/profiles (optional)
         """
         self._config = config
         self._http_repo = http_repo
         self._target_repo = target_repo
         self._session_id = session_id
+        self._cookie_provider = cookie_provider
         self._http_tool = HttpRequestTool(
             config=config,
             http_repo=http_repo,
             target_repo=target_repo,
             session_id=session_id,
+            cookie_provider=cookie_provider,
         )
 
     @property

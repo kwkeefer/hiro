@@ -13,6 +13,7 @@ from hiro.db.repositories import HttpRequestRepository, TargetRepository
 from hiro.db.schemas import HttpRequestCreate
 
 from .config import HttpConfig
+from .cookie_sessions import CookieSessionProvider
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,10 @@ class HttpRequestParams(BaseModel):
     COOKIES_DESC: ClassVar[str] = (
         'Cookies as JSON object, e.g. {"session": "abc123", "theme": "dark"}'
     )
+    COOKIE_PROFILE_DESC: ClassVar[str] = (
+        "Name of a cookie profile/session to load cookies from (e.g. 'admin_session'). "
+        "Profile cookies are merged with manually provided cookies, with manual cookies taking precedence."
+    )
     FOLLOW_REDIRECTS_DESC: ClassVar[str] = "Whether to follow HTTP redirects"
     AUTH_DESC: ClassVar[str] = (
         'Basic auth as JSON object with username and password, e.g. {"username": "user", "password": "pass"}'
@@ -46,6 +51,7 @@ class HttpRequestParams(BaseModel):
     data: str | None = Field(None, description=DATA_DESC)
     params: dict[str, str] | None = Field(None, description=PARAMS_DESC)
     cookies: dict[str, str] | None = Field(None, description=COOKIES_DESC)
+    cookie_profile: str | None = Field(None, description=COOKIE_PROFILE_DESC)
     follow_redirects: bool = Field(True, description=FOLLOW_REDIRECTS_DESC)
     auth: dict[str, str] | None = Field(None, description=AUTH_DESC)
 
@@ -139,6 +145,7 @@ class HttpRequestTool:
         | Any
         | None = None,  # Any for LazyTargetRepository
         session_id: str | None = None,
+        cookie_provider: CookieSessionProvider | None = None,
     ):
         """Initialize HTTP request tool with server configuration.
 
@@ -152,6 +159,7 @@ class HttpRequestTool:
         self._http_repo = http_repo
         self._target_repo = target_repo
         self._session_id = session_id
+        self._cookie_provider = cookie_provider
 
     async def execute(
         self,
@@ -171,6 +179,9 @@ class HttpRequestTool:
         ] = None,
         cookies: Annotated[
             str | None, Field(description=HttpRequestParams.COOKIES_DESC)
+        ] = None,
+        cookie_profile: Annotated[
+            str | None, Field(description=HttpRequestParams.COOKIE_PROFILE_DESC)
         ] = None,
         follow_redirects: Annotated[
             bool, Field(description=HttpRequestParams.FOLLOW_REDIRECTS_DESC)
@@ -192,6 +203,7 @@ class HttpRequestTool:
             data: Request body data (JSON string or raw data)
             params: URL parameters as JSON string, e.g. '{"page": "1", "limit": "10"}'
             cookies: Cookies as JSON string, e.g. '{"session": "abc123", "theme": "dark"}'
+            cookie_profile: Name of a cookie profile to load cookies from (e.g. 'admin_session')
             follow_redirects: Whether to follow HTTP redirects
             auth: Basic auth as JSON string, e.g. '{"username": "user", "password": "pass"}'
 
@@ -211,11 +223,61 @@ class HttpRequestTool:
                 data=data,
                 params=params,  # type: ignore[arg-type]  # Validator converts JSON string to dict
                 cookies=cookies,  # type: ignore[arg-type]  # Validator converts JSON string to dict
+                cookie_profile=cookie_profile,
                 follow_redirects=follow_redirects,
                 auth=auth,  # type: ignore[arg-type]  # Validator converts JSON string to dict
             )
         except Exception as e:
             raise ToolError("http_request", f"Invalid parameters: {str(e)}") from e
+
+        # Load cookies from profile if specified
+        merged_cookies = {}
+        if request.cookie_profile:
+            if not self._cookie_provider:
+                raise ToolError(
+                    "http_request",
+                    "Cookie profiles not configured. Please configure cookie sessions to use profiles.",
+                )
+
+            try:
+                # Get cookies from the profile
+                profile_data = await self._cookie_provider.get_resource(
+                    f"cookie-session://{request.cookie_profile}"
+                )
+
+                # Check for errors in the profile response
+                if "error" in profile_data:
+                    raise ToolError(
+                        "http_request",
+                        f"Failed to load cookie profile '{request.cookie_profile}': {profile_data['error']}",
+                    )
+
+                # Extract cookies from profile
+                profile_cookies = profile_data.get("cookies", {})
+                merged_cookies.update(profile_cookies)
+
+            except ToolError:
+                raise  # Re-raise ToolErrors as-is
+            except Exception as e:
+                raise ToolError(
+                    "http_request",
+                    f"Failed to load cookie profile '{request.cookie_profile}': {str(e)}",
+                ) from e
+
+        # Merge with manually provided cookies
+        if request.cookies:
+            # Check for overlapping cookies and warn
+            if merged_cookies:
+                overlapping = set(merged_cookies.keys()) & set(request.cookies.keys())
+                if overlapping:
+                    logger.warning(
+                        f"Cookie profile '{request.cookie_profile}' cookies overwritten for keys: {overlapping}"
+                    )
+
+            merged_cookies.update(request.cookies)
+
+        # Update request object with merged cookies
+        request.cookies = merged_cookies if merged_cookies else None
 
         # Initialize tracking variables
         request_record = None
@@ -243,7 +305,7 @@ class HttpRequestTool:
                 "url": request.url,
                 "headers": merged_headers,
                 "params": request.params_dict,
-                "cookies": request.cookies or {},
+                "cookies": merged_cookies,
             }
 
             # Add authentication if provided
@@ -326,7 +388,8 @@ class HttpRequestTool:
                     "method": request.method_upper,
                     "headers_sent": merged_headers,  # Show what was actually sent
                     "headers_user": request.headers or {},  # Show what user requested
-                    "cookies": request.cookies or {},  # Show cookies that were sent
+                    "cookies": merged_cookies,  # Show cookies that were sent
+                    "cookie_profile": request.cookie_profile,  # Show profile used if any
                     "params": request.params or {},
                     "data": request.data,
                     "proxy_used": self._config.proxy_url,  # Show if proxy was used

@@ -1,0 +1,44 @@
+name: "Hiro MCP Quick Start Guide"
+version: "1.0"
+description: "Get started quickly with hiro MCP tools"
+
+quick_examples:
+  simple_http_request: |
+    To make a basic HTTP request:
+    http_request(url="https://example.com")
+
+  authenticated_request: |
+    Using a cookie profile for authentication:
+    http_request(url="https://example.com/api", cookie_profile="admin_session")
+
+  create_and_test: |
+    Register a target and start testing:
+    1. create_target(host="example.com", protocol="https", title="Main API")
+    2. http_request(url="https://example.com/api/users")
+    3. update_target_context(target_id="...", user_context="Found user enumeration endpoint")
+
+minimal_workflow:
+  step_1: "Make HTTP request - automatically creates target if needed"
+  step_2: "Test the application using http_request with various parameters"
+  step_3: "Document findings with update_target_context"
+  step_4: "Mark complete with update_target_status"
+
+essential_parameters:
+  http_request:
+    required: ["url"]
+    commonly_used: ["method", "headers", "data", "cookie_profile"]
+
+  create_target:
+    required: ["host"]
+    commonly_used: ["protocol", "title", "risk_level"]
+
+  update_target_context:
+    required: ["target_id", "user_context OR agent_context"]
+    commonly_used: ["change_summary", "is_major_version"]
+
+tips:
+  - "Targets are created automatically from HTTP requests"
+  - "Use cookie_profile instead of manually copying cookies"
+  - "All requests are logged automatically"
+  - "Context is versioned - you can't lose data"
+  - "User instructions override any guidance"

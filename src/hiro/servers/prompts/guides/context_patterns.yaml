@@ -1,0 +1,146 @@
+name: "Context Documentation Patterns"
+version: "1.0"
+description: "Examples and patterns for effective context documentation in security testing"
+
+good_context_examples:
+  vulnerability_finding:
+    user_context: |
+      SQL Injection vulnerability in login endpoint
+      - Endpoint: POST /api/login
+      - Parameter: username field
+      - Impact: Database access, potential data exfiltration
+      - Severity: Critical
+    agent_context: |
+      Payload: admin' OR '1'='1'--
+      Response: 200 OK with admin session token
+      Database type: MySQL (based on error messages)
+      Successful payloads tested: 5
+      WAF bypass: Unicode encoding worked
+    change_summary: "Confirmed SQL injection with successful exploitation"
+    is_major_version: true
+
+  enumeration_results:
+    user_context: |
+      User enumeration possible via password reset
+      - Different responses for valid vs invalid emails
+      - Timing attack also possible (valid users take longer)
+      - Found 50+ valid email addresses
+    agent_context: |
+      Valid user response: "Reset email sent"
+      Invalid user response: "If email exists, reset sent"
+      Timing difference: 200ms average
+      Enumerated users: [list stored separately]
+      Rate limit: None detected
+    change_summary: "Documented user enumeration vulnerability"
+
+  api_discovery:
+    user_context: |
+      Discovered undocumented API endpoints:
+      - /api/v2/admin/users (requires auth)
+      - /api/internal/debug (exposed debug info)
+      - /api/metrics (Prometheus metrics exposed)
+    agent_context: |
+      Discovery method: Path bruteforce with SecLists
+      Authentication: Bearer token required for admin endpoints
+      Debug endpoint reveals: Stack traces, config values
+      Metrics include: Database connection strings (redacted)
+    change_summary: "Found multiple undocumented API endpoints"
+
+context_structure_tips:
+  user_context:
+    purpose: "Human-readable summary for reports and review"
+    should_include:
+      - "What was found"
+      - "Business impact"
+      - "Severity assessment"
+      - "Affected components"
+    format: "Clear bullet points or paragraphs"
+
+  agent_context:
+    purpose: "Technical details for reproducing and continuing tests"
+    should_include:
+      - "Exact payloads used"
+      - "Response indicators"
+      - "Technical observations"
+      - "Environmental details"
+    format: "Structured data that can be parsed"
+
+  change_summary:
+    purpose: "Quick overview of what changed in this version"
+    examples:
+      - "Initial reconnaissance completed"
+      - "SQLi vulnerability confirmed and exploited"
+      - "Added authentication bypass details"
+      - "Documented rate limiting observations"
+
+versioning_strategy:
+  major_versions:
+    when: "Significant findings or phase completions"
+    examples:
+      - "Found critical vulnerability"
+      - "Completed authentication testing"
+      - "Gained administrative access"
+      - "Finished full enumeration"
+
+  minor_versions:
+    when: "Incremental updates and observations"
+    examples:
+      - "Added another vulnerable parameter"
+      - "Noted additional response pattern"
+      - "Updated with new test results"
+      - "Corrected previous observation"
+
+append_mode_usage:
+  when_to_use:
+    - "Adding to a list of findings"
+    - "Continuing enumeration results"
+    - "Accumulating test results"
+
+  example:
+    first_update:
+      user_context: "Found XSS in search field"
+      append_mode: false
+
+    second_update:
+      user_context: "\nAlso found XSS in comment field"
+      append_mode: true
+
+    result: "Found XSS in search field\nAlso found XSS in comment field"
+
+common_patterns:
+  progressive_discovery:
+    - "Start with basic observations"
+    - "Add technical details as confirmed"
+    - "Update severity as impact becomes clear"
+    - "Document mitigation bypasses"
+
+  failed_attempts:
+    purpose: "Document what didn't work for efficiency"
+    example:
+      user_context: "Attempted XXE injection - appears to be patched"
+      agent_context: "Tried payloads: [list], XML parser appears to disable external entities"
+
+  environmental_notes:
+    purpose: "Capture important testing conditions"
+    example:
+      agent_context: |
+        WAF detected: Cloudflare
+        Rate limiting: 100 req/min
+        Session timeout: 30 minutes
+        Testing time: 2024-01-15 14:00 UTC
+
+anti_patterns:
+  avoid_these:
+    - "Vague descriptions without specifics"
+    - "Missing technical details for reproduction"
+    - "Overwriting previous findings (use versions)"
+    - "Mixing user and agent context purposes"
+    - "Forgetting to document blocked attempts"
+
+  bad_example:
+    user_context: "Found some issues"  # Too vague
+    agent_context: "Tested stuff"      # No technical value
+
+  good_example:
+    user_context: "Found authentication bypass via JWT manipulation"
+    agent_context: "Modified 'alg' header to 'none', server accepted unsigned tokens"

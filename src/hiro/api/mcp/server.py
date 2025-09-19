@@ -71,7 +71,7 @@ class FastMcpServerAdapter:
             self._mcp.tool(
                 provider._http_tool.execute,
                 name="http_request",
-                description="Make HTTP request with full control over headers, data, and parameters.",
+                description="Make HTTP request with full control. Supports cookie profiles for session management. Parameters: url (required), method, headers, data, params, cookies (JSON), cookie_profile (name), auth, follow_redirects.",
             )
 
         # Register AI logging tools for target management
@@ -79,7 +79,7 @@ class FastMcpServerAdapter:
             self._mcp.tool(
                 provider._create_target_tool.execute,
                 name="create_target",
-                description="Register a new target for testing with host, port, protocol, and metadata.",
+                description="Register a new target for testing. Required: host (string). Optional: port (integer 1-65535, omit for protocol defaults), protocol (http/https/tcp/udp), title, status (active/inactive/blocked/completed), risk_level (low/medium/high/critical), notes.",
             )
 
         if hasattr(provider, "_update_target_tool"):

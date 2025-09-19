@@ -78,19 +78,28 @@ hiro/
 ```
 src/hiro/servers/           # Tool collections for the unified server
 ├── http/                        # HTTP request tools (core functionality)
-│   ├── tools.py                 # HTTP request execution
+│   ├── tools.py                 # HTTP request execution with cookie profile support
 │   ├── providers.py             # Tool provider with config injection
-│   └── config.py                # HTTP-specific configuration
-└── ai_logging/                  # Target management tools (database features)
-    ├── tools.py                 # Target CRUD operations
-    ├── providers.py             # Tool provider with DB repositories
-    └── (works WITH http/, not separately)
+│   ├── config.py                # HTTP-specific configuration
+│   └── cookie_sessions.py       # Cookie session/profile management
+├── ai_logging/                  # Target management tools (database features)
+│   ├── tools.py                 # Target CRUD operations
+│   ├── providers.py             # Tool provider with DB repositories
+│   └── (works WITH http/, not separately)
+└── prompts/                     # Prompt guides for LLM agents
+    ├── provider.py              # MCP resource provider for prompts
+    └── guides/                  # Built-in prompt YAML files
+        ├── tool_usage_guide.yaml
+        ├── quickstart.yaml
+        └── context_patterns.yaml
 ```
 
 When you run `hiro serve-http`:
-- **Always includes**: HTTP request tools
+- **Always includes**: HTTP request tools with cookie profile support
 - **When DB configured**: Also includes target management tools
-- **Result**: Single unified server with multiple tool categories
+- **Cookie sessions**: MCP resources for pre-configured auth sessions
+- **Prompt guides**: MCP resources for agent guidance
+- **Result**: Single unified server with multiple tool categories and resources
 
 ### FastMCP Integration Philosophy - Hybrid Approach
 We use a **hybrid approach** that balances architectural purity with pragmatic simplicity:
@@ -120,6 +129,34 @@ When creating MCP tools, follow the parameter transformation pattern (ADR-014):
 - Use Pydantic models internally for validation and transformation
 - Include clear JSON examples in parameter descriptions
 - See `HttpRequestTool` and AI logging tools for reference implementations
+
+### Cookie Session Management
+The HTTP tools support cookie profiles for maintaining authenticated sessions:
+- **Cookie profiles**: Pre-configured authentication sessions stored in JSON files
+- **XDG compliant**: Cookie files stored in `~/.local/share/hiro/cookies/`
+- **Security enforced**: Files must have 0600 or 0400 permissions
+- **Dynamic loading**: Cookies are re-read based on cache TTL
+- **Profile merging**: Manual cookies override profile cookies when both provided
+- **Usage**: Pass `cookie_profile="session_name"` to `http_request` tool
+
+Configuration file: `~/.config/hiro/cookie_sessions.yaml`
+```yaml
+sessions:
+  admin_session:
+    description: "Admin user session"
+    cookie_file: "admin_cookies.json"  # Relative to XDG data dir
+    cache_ttl: 3600  # Seconds
+```
+
+### Prompt Resource System
+Provides structured guidance to LLM agents via MCP resources:
+- **Built-in guides**: Tool usage, quickstart, and context documentation patterns
+- **User customization**: Add custom prompts to `~/.config/hiro/prompts/`
+- **Multiple formats**: Available as JSON, YAML, or Markdown
+- **Resource URIs**: Access via `prompt://guide_name`
+- **Environment override**: Set `HIRO_PROMPTS_DIR` for custom location
+
+The guides emphasize that user instructions always take precedence and provide context on how tools work together rather than prescriptive methodologies.
 
 ## Notes for AI Assistants
 - Always use the `src/` layout when adding new modules

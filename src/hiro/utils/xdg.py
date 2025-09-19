@@ -107,3 +107,25 @@ def get_cookie_cache_dir() -> Path:
     cache_dir = get_cache_dir() / "cookie_cache"
     cache_dir.mkdir(parents=True, exist_ok=True)
     return cache_dir
+
+
+def get_prompts_dir() -> Path:
+    """Get the directory for prompt guides.
+
+    Creates the directory if it doesn't exist.
+
+    Returns:
+        Path to $XDG_CONFIG_HOME/hiro/prompts
+    """
+    prompts_dir = get_config_dir() / "prompts"
+    prompts_dir.mkdir(parents=True, exist_ok=True)
+    return prompts_dir
+
+
+def get_user_prompts_config_path() -> Path:
+    """Get the path for user prompts configuration.
+
+    Returns:
+        Path to $XDG_CONFIG_HOME/hiro/prompts.yaml
+    """
+    return get_config_dir() / "prompts.yaml"
