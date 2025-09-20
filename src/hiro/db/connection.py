@@ -3,6 +3,7 @@
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
@@ -28,7 +29,7 @@ def create_database_engine(settings: DatabaseSettings) -> AsyncEngine:
     )
 
     # Configure engine based on settings
-    engine_kwargs = {
+    engine_kwargs: dict[str, Any] = {
         "echo": False,  # Set to True for SQL query debugging
         "pool_size": settings.pool_size,
         "max_overflow": settings.max_overflow,

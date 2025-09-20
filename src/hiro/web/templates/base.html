@@ -66,8 +66,11 @@
                         <h1 class="text-xl font-bold text-gray-900 dark:text-white">Hiro</h1>
                     </div>
                     <div class="hidden sm:ml-6 sm:flex sm:space-x-8">
-                        <a href="/targets" class="border-indigo-500 text-gray-900 dark:text-white inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                        <a href="/targets" class="{% if request.url.path.startswith('/targets') %}border-indigo-500{% else %}border-transparent hover:border-gray-300{% endif %} text-gray-900 dark:text-white inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
                             Targets
+                        </a>
+                        <a href="/missions" class="{% if request.url.path.startswith('/missions') %}border-indigo-500{% else %}border-transparent hover:border-gray-300{% endif %} text-gray-900 dark:text-white inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                            Missions
                         </a>
                     </div>
                 </div>

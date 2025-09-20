@@ -144,7 +144,7 @@ class HttpRequestTool:
         target_repo: TargetRepository
         | Any
         | None = None,  # Any for LazyTargetRepository
-        session_id: str | None = None,
+        mission_id: str | None = None,
         cookie_provider: CookieSessionProvider | None = None,
     ):
         """Initialize HTTP request tool with server configuration.
@@ -153,13 +153,25 @@ class HttpRequestTool:
             config: HTTP server configuration with proxy, headers, etc.
             http_repo: Repository for logging HTTP requests (optional)
             target_repo: Repository for managing targets (optional)
-            session_id: Current AI session ID for linking requests (optional)
+            mission_id: Current mission ID for linking requests (optional)
         """
         self._config = config
         self._http_repo = http_repo
         self._target_repo = target_repo
-        self._session_id = session_id
+        self._mission_id = mission_id
         self._cookie_provider = cookie_provider
+        self._mission_provider: Any | None = None  # Set via dependency injection
+
+    def set_mission_provider(self, mission_provider: Any) -> None:
+        """Set the mission provider for context awareness.
+
+        This implements the dependency injection pattern from ADR-009.
+        Allows HTTP tool to check mission context when no explicit mission_id is provided.
+
+        Args:
+            mission_provider: MissionManagementProvider instance
+        """
+        self._mission_provider = mission_provider
 
     async def execute(
         self,
@@ -189,6 +201,12 @@ class HttpRequestTool:
         auth: Annotated[
             str | None, Field(description=HttpRequestParams.AUTH_DESC)
         ] = None,
+        mission_id: Annotated[
+            str | None,
+            Field(
+                description="Optional mission ID to link this request to. If not provided, uses current mission context if set."
+            ),
+        ] = None,
     ) -> dict[str, Any]:
         """Make HTTP request with full control over headers, data, and parameters.
 
@@ -206,10 +224,11 @@ class HttpRequestTool:
             cookie_profile: Name of a cookie profile to load cookies from (e.g. 'admin_session')
             follow_redirects: Whether to follow HTTP redirects
             auth: Basic auth as JSON string, e.g. '{"username": "user", "password": "pass"}'
+            mission_id: Optional mission ID to link this request to (uses context if not provided)
 
         Returns:
             Response data containing status_code, headers, text, json (if applicable),
-            cookies, elapsed_ms, and request details for audit trail
+            cookies, elapsed_ms, request details, and mission linkage confirmation
 
         Raises:
             ToolError: If request fails due to timeout, connection, or other errors
@@ -230,9 +249,31 @@ class HttpRequestTool:
         except Exception as e:
             raise ToolError("http_request", f"Invalid parameters: {str(e)}") from e
 
+        # Determine active mission ID following ADR-016 precedence:
+        # 1. Explicit parameter (highest priority)
+        # 2. Provider context (via dependency injection)
+        # 3. Tool's own mission_id (legacy/fallback)
+        active_mission_id = mission_id
+
+        if not active_mission_id and self._mission_provider:
+            # Get mission context from provider
+            active_mission_id = self._mission_provider.get_current_mission_id()
+
+        if not active_mission_id:
+            # Fall back to tool's own mission_id (set at init)
+            active_mission_id = self._mission_id
+
+        # Determine active cookie profile with similar precedence:
+        # 1. Explicit parameter (highest priority)
+        # 2. Mission context cookie profile
+        active_cookie_profile = request.cookie_profile
+        if not active_cookie_profile and self._mission_provider:
+            # Get cookie profile from mission context
+            active_cookie_profile = self._mission_provider.get_current_cookie_profile()
+
         # Load cookies from profile if specified
         merged_cookies = {}
-        if request.cookie_profile:
+        if active_cookie_profile:
             if not self._cookie_provider:
                 raise ToolError(
                     "http_request",
@@ -242,7 +283,7 @@ class HttpRequestTool:
             try:
                 # Get cookies from the profile
                 profile_data = await self._cookie_provider.get_resource(
-                    f"cookie-session://{request.cookie_profile}"
+                    f"cookie-session://{active_cookie_profile}"
                 )
 
                 # Check for errors in the profile response
@@ -322,14 +363,9 @@ class HttpRequestTool:
                     request_config["content"] = request.data
                 request_body_for_logging = request.data
 
-            # Create target and log pre-request if database logging is enabled
-            if self._config.logging_enabled and self._http_repo and self._target_repo:
+            # Log pre-request if database logging is enabled
+            if self._config.logging_enabled and self._http_repo:
                 try:
-                    # Auto-create/get target from URL
-                    target_record = await self._target_repo.get_or_create_from_url(
-                        request.url
-                    )
-
                     # Log request (pre-response)
                     request_record = await self._log_request_start(
                         method=request.method_upper,
@@ -340,13 +376,27 @@ class HttpRequestTool:
                         headers=merged_headers,
                         cookies=request.cookies or {},
                         request_body=request_body_for_logging,
+                        mission_id=active_mission_id,
                     )
 
-                    # Link request to target
-                    if request_record and target_record:
-                        await self._http_repo.link_to_target(
-                            request_record.id, target_record.id
+                    # If we have a target repository, try to link to existing target
+                    # (but don't auto-create targets anymore)
+                    if request_record and self._target_repo:
+                        parsed = urlparse(request.url)
+                        host = parsed.hostname or parsed.netloc
+                        port = parsed.port
+                        protocol = parsed.scheme or "http"
+
+                        # Try to find existing target
+                        target_record = await self._target_repo.get_by_endpoint(
+                            host, port, protocol
                         )
+
+                        # Link request to target if found
+                        if target_record:
+                            await self._http_repo.link_to_target(
+                                request_record.id, target_record.id
+                            )
 
                 except Exception as e:
                     logger.warning(f"Failed to log request start: {e}", exc_info=True)
@@ -411,6 +461,17 @@ class HttpRequestTool:
                     except Exception as e:
                         logger.warning(f"Failed to log response: {e}", exc_info=True)
 
+                # Add mission linkage feedback per ADR-016
+                if active_mission_id:
+                    response_data["mission_context"] = (
+                        f"Request logged to mission: {active_mission_id}"
+                    )
+                    # TODO: Add mission name when we have access to mission repo
+
+                # Add cookie profile feedback if used
+                if active_cookie_profile:
+                    response_data["cookie_profile_used"] = active_cookie_profile
+
                 return response_data
 
         except httpx.TimeoutException as e:
@@ -432,10 +493,11 @@ class HttpRequestTool:
         url: str,
         host: str,
         path: str,
-        query_params: dict | None = None,
-        headers: dict | None = None,
-        cookies: dict | None = None,
+        query_params: dict[str, Any] | None = None,
+        headers: dict[str, Any] | None = None,
+        cookies: dict[str, Any] | None = None,
         request_body: str | None = None,
+        mission_id: str | None = None,
     ) -> Any | None:
         """Log the start of an HTTP request."""
         if not self._http_repo:
@@ -455,11 +517,11 @@ class HttpRequestTool:
 
             from uuid import UUID
 
-            # Convert session_id to UUID if provided
-            session_uuid = UUID(self._session_id) if self._session_id else None
+            # Convert mission_id to UUID if provided
+            mission_uuid = UUID(mission_id) if mission_id else None
 
             request_data = HttpRequestCreate(
-                session_id=session_uuid,
+                mission_id=mission_uuid,
                 method=method,
                 url=url,
                 host=host,
@@ -480,7 +542,7 @@ class HttpRequestTool:
         self,
         request_id: Any,
         status_code: int,
-        response_headers: dict,
+        response_headers: dict[str, Any],
         response_body: str | None,
         response_size: int | None,
         elapsed_ms: float,
@@ -536,7 +598,7 @@ class HttpRequestTool:
         except Exception as e:
             logger.error(f"Failed to log request error: {e}", exc_info=True)
 
-    def _filter_sensitive_data(self, data: dict) -> dict:
+    def _filter_sensitive_data(self, data: dict[str, Any]) -> dict[str, Any]:
         """Filter sensitive headers/data based on configuration."""
         if not self._config.sensitive_headers:
             # Log everything by default

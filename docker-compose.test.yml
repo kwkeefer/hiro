@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   test-db:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     container_name: hiro-test-db
     environment:
       POSTGRES_USER: test_user

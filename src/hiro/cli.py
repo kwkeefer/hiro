@@ -314,6 +314,7 @@ def serve_http(
         http_repo = None
         target_repo = None
         ai_logging_provider = None
+        mission_provider = None
         if settings.database.logging_enabled:
             try:
                 # Initialize database but don't create session factory yet
@@ -338,6 +339,37 @@ def serve_http(
                 ai_logging_provider = AiLoggingToolProvider(
                     target_repo=target_repo, context_repo=context_repo
                 )
+
+                # Create mission management provider if pgvector is available
+                try:
+                    from hiro.core.vector.search import VectorSearch
+                    from hiro.db.lazy_repository import (
+                        LazyMissionActionRepository,
+                        LazyMissionRepository,
+                    )
+                    from hiro.servers.missions import SimplifiedMissionProvider
+
+                    mission_repo = LazyMissionRepository(settings.database)
+                    action_repo = LazyMissionActionRepository(settings.database)
+                    vector_search = (
+                        VectorSearch()
+                        if hasattr(settings.database, "pgvector_enabled")
+                        and settings.database.pgvector_enabled
+                        else None
+                    )
+
+                    mission_provider = SimplifiedMissionProvider(  # type: ignore[abstract]
+                        mission_repo=mission_repo,  # type: ignore[arg-type]
+                        action_repo=action_repo,  # type: ignore[arg-type]
+                        request_repo=http_repo,  # type: ignore[arg-type]
+                        vector_search=vector_search,
+                    )
+                    click.echo("   Mission Management: Enabled")
+                    if vector_search:
+                        click.echo("   Vector Search: Enabled (pgvector)")
+                except Exception as e:
+                    click.echo(f"   Mission Management: Failed to initialize - {e}")
+                    mission_provider = None
 
             except Exception as e:
                 click.echo(f"   Database Logging: Failed to configure - {e}")
@@ -365,6 +397,13 @@ def serve_http(
         # These tools work alongside HTTP tools in the SAME server instance
         if ai_logging_provider:
             server.add_tool_provider(ai_logging_provider)
+
+        # Add mission management tools if available
+        if mission_provider:
+            server.add_tool_provider(mission_provider)
+            # Link providers for context sharing (ADR-009: dependency injection)
+            http_provider.set_mission_provider(mission_provider)
+            click.echo("   Mission Context: Linked to HTTP tools")
 
         # Add cookie session resources if provider was created
         if cookie_provider:
@@ -406,6 +445,20 @@ def serve_http(
             click.echo("   • search_targets - Search and filter targets")
             click.echo("   • get_target_context - Retrieve target context and history")
             click.echo("   • update_target_context - Create or update target context")
+
+        if mission_provider:
+            click.echo("\n   Mission Management:")
+            click.echo("   • create_mission - Create a new testing mission")
+            click.echo(
+                "   • set_mission_context - Set active mission for HTTP requests"
+            )
+            click.echo("   • get_current_mission - Get current mission context")
+            click.echo("   • record_action - Record test action with linked requests")
+            click.echo("   • get_mission_context - Get intelligent mission context")
+            if vector_search:
+                click.echo("   • find_similar_techniques - Find similar past actions")
+                click.echo("   • search_technique_library - Search technique library")
+                click.echo("   • get_success_patterns - Get successful patterns")
 
         # Show available resources
         if cookie_provider or prompt_provider:

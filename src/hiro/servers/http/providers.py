@@ -1,6 +1,6 @@
 """HTTP tool providers with configuration injection."""
 
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Any, Union
 
 from hiro.db.repositories import HttpRequestRepository, TargetRepository
 
@@ -35,7 +35,7 @@ class HttpToolProvider:
             HttpRequestRepository, "LazyHttpRequestRepository", None
         ] = None,
         target_repo: Union[TargetRepository, "LazyTargetRepository", None] = None,
-        session_id: str | None = None,
+        mission_id: str | None = None,
         cookie_provider: CookieSessionProvider | None = None,
     ):
         """Initialize with server configuration and optional database repositories.
@@ -44,19 +44,22 @@ class HttpToolProvider:
             config: HTTP server configuration for proxy, headers, etc.
             http_repo: Repository for logging HTTP requests (optional)
             target_repo: Repository for managing targets (optional)
-            session_id: Current AI session ID for linking requests (optional)
+            mission_id: Current mission ID for linking requests (optional)
             cookie_provider: Provider for cookie sessions/profiles (optional)
         """
         self._config = config
         self._http_repo = http_repo
         self._target_repo = target_repo
-        self._session_id = session_id
+        self._mission_id = mission_id
         self._cookie_provider = cookie_provider
+        self._mission_provider: Any | None = (
+            None  # Will be set via set_mission_provider
+        )
         self._http_tool = HttpRequestTool(
             config=config,
             http_repo=http_repo,
             target_repo=target_repo,
-            session_id=session_id,
+            mission_id=mission_id,
             cookie_provider=cookie_provider,
         )
 
@@ -69,3 +72,16 @@ class HttpToolProvider:
     def http_tool(self) -> HttpRequestTool:
         """Access to HTTP request tool for direct registration."""
         return self._http_tool
+
+    def set_mission_provider(self, mission_provider: Any) -> None:
+        """Set the mission provider for context awareness.
+
+        This implements the dependency injection pattern from ADR-009.
+        Called after both providers are created to link them.
+
+        Args:
+            mission_provider: MissionManagementProvider instance
+        """
+        self._mission_provider = mission_provider
+        # Also update the HTTP tool's mission provider
+        self._http_tool.set_mission_provider(mission_provider)

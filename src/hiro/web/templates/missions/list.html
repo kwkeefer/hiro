@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+
+{% block title %}Missions - Hiro{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Header -->
+    <div class="mb-8 flex justify-between items-center">
+        <div>
+            <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Testing Missions</h2>
+            <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                Organize and track your security testing efforts
+            </p>
+        </div>
+        <div>
+            <a href="/missions/create" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                <svg class="-ml-1 mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                </svg>
+                New Mission
+            </a>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="mb-6 bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+        <form method="GET" action="/missions" class="flex gap-4">
+            <div class="flex-1">
+                <input
+                    type="text"
+                    name="search"
+                    value="{{ search_query or '' }}"
+                    placeholder="Search missions..."
+                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white"
+                />
+            </div>
+            <div>
+                <select name="mission_type" class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white">
+                    <option value="">All Types</option>
+                    <option value="prompt_injection" {% if current_type == 'prompt_injection' %}selected{% endif %}>Prompt Injection</option>
+                    <option value="business_logic" {% if current_type == 'business_logic' %}selected{% endif %}>Business Logic</option>
+                    <option value="auth_bypass" {% if current_type == 'auth_bypass' %}selected{% endif %}>Auth Bypass</option>
+                    <option value="recon" {% if current_type == 'recon' %}selected{% endif %}>Reconnaissance</option>
+                    <option value="general" {% if current_type == 'general' %}selected{% endif %}>General</option>
+                </select>
+            </div>
+            <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                Filter
+            </button>
+            {% if search_query or current_type %}
+            <a href="/missions" class="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-white rounded-md hover:bg-gray-400 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+                Clear
+            </a>
+            {% endif %}
+        </form>
+    </div>
+
+    <!-- Mission List -->
+    <div class="bg-white dark:bg-gray-800 shadow overflow-hidden sm:rounded-lg">
+        {% if missions %}
+        <ul class="divide-y divide-gray-200 dark:divide-gray-700">
+            {% for mission in missions %}
+            <li>
+                <a href="/missions/{{ mission.id }}" class="block hover:bg-gray-50 dark:hover:bg-gray-700 px-4 py-4 sm:px-6">
+                    <div class="flex items-center justify-between">
+                        <div class="flex-1">
+                            <div class="flex items-center justify-between">
+                                <p class="text-lg font-medium text-indigo-600 dark:text-indigo-400 truncate">
+                                    {{ mission.name }}
+                                </p>
+                                <div class="ml-2 flex-shrink-0 flex">
+                                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-{{ 'green' if mission.status == 'completed' else 'blue' }}-100 text-{{ 'green' if mission.status == 'completed' else 'blue' }}-800 dark:bg-{{ 'green' if mission.status == 'completed' else 'blue' }}-900 dark:text-{{ 'green' if mission.status == 'completed' else 'blue' }}-200">
+                                        {{ mission.status }}
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="mt-2 flex justify-between">
+                                <div class="flex-1">
+                                    <p class="text-sm text-gray-600 dark:text-gray-400">
+                                        {{ mission.goal[:100] }}{% if mission.goal|length > 100 %}...{% endif %}
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
+                                    {{ mission.type }}
+                                </span>
+                                {% if mission.targets %}
+                                <span class="ml-2">
+                                    Target: {{ mission.targets[0] }}
+                                </span>
+                                {% endif %}
+                                <span class="ml-4">
+                                    {{ mission.action_count }} actions • {{ mission.request_count }} requests
+                                </span>
+                                <span class="ml-4">
+                                    Created {{ mission.created_at.strftime('%Y-%m-%d %H:%M') if mission.created_at else 'Unknown' }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <div class="text-center py-12">
+            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+            </svg>
+            <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-white">No missions</h3>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Get started by creating a new mission.</p>
+            <div class="mt-6">
+                <a href="/missions/create" class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                    <svg class="-ml-1 mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                    </svg>
+                    New Mission
+                </a>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

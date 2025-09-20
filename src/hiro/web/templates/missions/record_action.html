@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+
+{% block title %}Record Action - {{ mission.name }} - Hiro{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Header -->
+    <div class="mb-8">
+        <nav class="text-sm mb-4">
+            <a href="/missions" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">Missions</a>
+            <span class="mx-2 text-gray-400">/</span>
+            <a href="/missions/{{ mission.id }}" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">{{ mission.name }}</a>
+            <span class="mx-2 text-gray-400">/</span>
+            <span class="text-gray-900 dark:text-white">Record Action</span>
+        </nav>
+        <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Record Test Action</h2>
+        <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+            Document what you tested and what you learned
+        </p>
+    </div>
+
+    <!-- Form -->
+    <form method="POST" action="/missions/{{ mission.id }}/record-action" class="space-y-6 bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+        <!-- Action Type -->
+        <div>
+            <label for="action_type" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Action Type <span class="text-red-500">*</span>
+            </label>
+            <select
+                id="action_type"
+                name="action_type"
+                required
+                class="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white"
+            >
+                <option value="payload_test">Payload Test</option>
+                <option value="recon">Reconnaissance</option>
+                <option value="exploit">Exploit Attempt</option>
+                <option value="analysis">Analysis</option>
+            </select>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Type of testing action performed
+            </p>
+        </div>
+
+        <!-- Technique -->
+        <div>
+            <label for="technique" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Technique <span class="text-red-500">*</span>
+            </label>
+            <input
+                type="text"
+                id="technique"
+                name="technique"
+                required
+                placeholder="e.g., Role reversal prompt injection"
+                class="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white"
+            />
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Brief description of the technique used
+            </p>
+        </div>
+
+        <!-- Payload -->
+        <div>
+            <label for="payload" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Payload/Input
+            </label>
+            <textarea
+                id="payload"
+                name="payload"
+                rows="4"
+                placeholder="The exact payload, prompt, or input you used"
+                class="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white font-mono text-sm"
+            ></textarea>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                The actual payload or input used (optional)
+            </p>
+        </div>
+
+        <!-- Result -->
+        <div>
+            <label for="result" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Result/Output
+            </label>
+            <textarea
+                id="result"
+                name="result"
+                rows="4"
+                placeholder="What response or behavior did you observe?"
+                class="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white font-mono text-sm"
+            ></textarea>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                The response or behavior observed (optional)
+            </p>
+        </div>
+
+        <!-- Success -->
+        <div>
+            <label class="flex items-center">
+                <input
+                    type="checkbox"
+                    name="success"
+                    value="true"
+                    class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                />
+                <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                    This action was successful
+                </span>
+            </label>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Check if the action achieved its intended goal
+            </p>
+        </div>
+
+        <!-- Learning -->
+        <div>
+            <label for="learning" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                What did you learn?
+            </label>
+            <textarea
+                id="learning"
+                name="learning"
+                rows="3"
+                placeholder="Key insights or discoveries from this action"
+                class="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white"
+            ></textarea>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Document any insights for future reference (optional)
+            </p>
+        </div>
+
+        <!-- Note about HTTP Requests -->
+        <div class="bg-blue-50 dark:bg-blue-900 border-l-4 border-blue-400 p-4">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <svg class="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                    </svg>
+                </div>
+                <div class="ml-3">
+                    <p class="text-sm text-blue-700 dark:text-blue-200">
+                        The last 5 HTTP requests made for this mission will be automatically linked to this action.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
+            <a href="/missions/{{ mission.id }}?tab=actions" class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                Cancel
+            </a>
+            <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                Record Action
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

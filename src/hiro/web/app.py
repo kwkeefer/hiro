@@ -12,7 +12,7 @@ from fastapi.templating import Jinja2Templates
 
 from hiro.core.config.settings import get_settings
 from hiro.db import auto_migrate_database
-from hiro.web.routers import api, targets
+from hiro.web.routers import api, missions, targets
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +69,7 @@ templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 # Include routers
 app.include_router(targets.router, prefix="/targets", tags=["targets"])
+app.include_router(missions.router, prefix="/missions", tags=["missions"])
 app.include_router(api.router, prefix="/api", tags=["api"])
 
 

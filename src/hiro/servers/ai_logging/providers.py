@@ -45,18 +45,18 @@ class AiLoggingToolProvider:
         context_repo: Union[
             TargetContextRepository, "LazyTargetContextRepository", None
         ] = None,
-        session_id: str | None = None,
+        mission_id: str | None = None,
     ):
         """Initialize with database repositories.
 
         Args:
             target_repo: Repository for managing targets (optional)
             context_repo: Repository for managing context versions (optional)
-            session_id: Current AI session ID for linking operations (optional)
+            mission_id: Current mission ID for linking operations (optional)
         """
         self._target_repo = target_repo
         self._context_repo = context_repo
-        self._session_id = session_id
+        self._mission_id = mission_id
 
         # Initialize tools as properties for direct registration
         self._create_target_tool = CreateTargetTool(target_repo=target_repo)

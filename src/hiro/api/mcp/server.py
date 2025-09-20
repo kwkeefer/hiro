@@ -118,6 +118,11 @@ class FastMcpServerAdapter:
                 description="Create or update target context (creates new immutable version).",
             )
 
+        # Register mission management tools
+        if hasattr(provider, "register_tools"):
+            # MissionManagementProvider uses a different pattern with register_tools method
+            provider.register_tools(self._mcp)
+
         # For future tool types, we can add similar direct registrations here
         # This avoids the complexity of generic wrappers while keeping provider organization
 

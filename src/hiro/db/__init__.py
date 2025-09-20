@@ -9,17 +9,17 @@ from .connection import (
     test_connection,
 )
 from .models import (
-    AiSession,
     AttemptType,
     Base,
     ConfidenceLevel,
     ContextChangeType,
     HttpRequest,
+    Mission,
+    MissionTarget,
     NoteType,
     RequestTag,
     RiskLevel,
     SessionStatus,
-    SessionTarget,
     Target,
     TargetAttempt,
     TargetContext,
@@ -29,8 +29,8 @@ from .models import (
     TargetStatus,
 )
 from .repositories import (
-    AiSessionRepository,
     HttpRequestRepository,
+    MissionRepository,
     RequestTagRepository,
     TargetAttemptRepository,
     TargetContextRepository,
@@ -38,20 +38,17 @@ from .repositories import (
     TargetRepository,
 )
 from .schemas import (
-    AiSession as AiSessionSchema,
-)
-from .schemas import (
-    # Session schemas
-    AiSessionCreate,
-    AiSessionUpdate,
     AttemptSearchParams,
     # Request schemas
     HttpRequestCreate,
     HttpRequestUpdate,
+    # Mission schemas
+    MissionCreate,
+    MissionSummary,
+    MissionUpdate,
     RequestSearchParams,
     # Tag schemas
     RequestTagCreate,
-    SessionSummary,
     # Attempt schemas
     TargetAttemptCreate,
     TargetAttemptUpdate,
@@ -66,6 +63,9 @@ from .schemas import (
 )
 from .schemas import (
     HttpRequest as HttpRequestSchema,
+)
+from .schemas import (
+    Mission as MissionSchema,
 )
 from .schemas import (
     RequestTag as RequestTagSchema,
@@ -94,11 +94,11 @@ __all__ = [
     "TargetContext",
     "TargetNote",
     "TargetAttempt",
-    "AiSession",
+    "Mission",
     "HttpRequest",
     "RequestTag",
     "TargetRequest",
-    "SessionTarget",
+    "MissionTarget",
     # Enums
     "TargetStatus",
     "RiskLevel",
@@ -112,7 +112,7 @@ __all__ = [
     "TargetContextRepository",
     "TargetNoteRepository",
     "TargetAttemptRepository",
-    "AiSessionRepository",
+    "MissionRepository",
     "HttpRequestRepository",
     "RequestTagRepository",
     # Schemas
@@ -128,10 +128,10 @@ __all__ = [
     "TargetAttemptUpdate",
     "TargetAttemptSchema",
     "AttemptSearchParams",
-    "AiSessionCreate",
-    "AiSessionUpdate",
-    "AiSessionSchema",
-    "SessionSummary",
+    "MissionCreate",
+    "MissionUpdate",
+    "MissionSchema",
+    "MissionSummary",
     "HttpRequestCreate",
     "HttpRequestUpdate",
     "HttpRequestSchema",

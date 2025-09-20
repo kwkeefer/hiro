@@ -287,7 +287,7 @@ class TestHttpRequestTool:
     def mock_target_repo(self):
         """Provide mock target repository."""
         repo = AsyncMock()
-        repo.get_or_create_from_url = AsyncMock(
+        repo.get_by_endpoint = AsyncMock(
             return_value=MagicMock(id=1, host="example.com")
         )
         return repo
@@ -302,7 +302,7 @@ class TestHttpRequestTool:
         assert tool._config == http_config
         assert tool._http_repo is None
         assert tool._target_repo is None
-        assert tool._session_id is None
+        assert tool._mission_id is None
 
     @pytest.mark.unit
     async def test_tool_with_repositories(
@@ -310,20 +310,20 @@ class TestHttpRequestTool:
     ):
         """Test tool initialization with repositories."""
         # Arrange
-        session_id = "test-session-123"
+        mission_id = "test-mission-123"
 
         # Act
         tool = HttpRequestTool(
             config=http_config,
             http_repo=mock_http_repo,
             target_repo=mock_target_repo,
-            session_id=session_id,
+            mission_id=mission_id,
         )
 
         # Assert
         assert tool._http_repo == mock_http_repo
         assert tool._target_repo == mock_target_repo
-        assert tool._session_id == session_id
+        assert tool._mission_id == mission_id
 
     @pytest.mark.unit
     async def test_execute_basic_get_request(self, http_config):
@@ -559,12 +559,12 @@ class TestHttpRequestTool:
         """Test that database logging works when enabled."""
         # Arrange
         http_config.logging_enabled = True
-        session_id = "550e8400-e29b-41d4-a716-446655440000"
+        mission_id = "550e8400-e29b-41d4-a716-446655440000"
         tool = HttpRequestTool(
             config=http_config,
             http_repo=mock_http_repo,
             target_repo=mock_target_repo,
-            session_id=session_id,
+            mission_id=mission_id,
         )
 
         mock_response = MagicMock()
@@ -587,8 +587,8 @@ class TestHttpRequestTool:
             await tool.execute(url="https://api.example.com/test")
 
         # Assert
-        mock_target_repo.get_or_create_from_url.assert_called_once_with(
-            "https://api.example.com/test"
+        mock_target_repo.get_by_endpoint.assert_called_once_with(
+            "api.example.com", None, "https"
         )
         mock_http_repo.create.assert_called_once()
         mock_http_repo.update.assert_called_once()
@@ -626,7 +626,7 @@ class TestHttpRequestTool:
 
         # Assert
         mock_http_repo.create.assert_not_called()
-        mock_target_repo.get_or_create_from_url.assert_not_called()
+        mock_target_repo.get_by_endpoint.assert_not_called()
 
     @pytest.mark.unit
     async def test_sensitive_headers_filtering(self, http_config, mock_http_repo):

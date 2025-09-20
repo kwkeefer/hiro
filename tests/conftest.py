@@ -13,6 +13,13 @@ from fastapi.testclient import TestClient
 src_path = Path(__file__).parent.parent / "src"
 sys.path.insert(0, str(src_path))
 
+from tests.fixtures.database import (  # noqa: F401, E402
+    db_manager,
+    isolated_test_db,
+    test_database_settings,
+    test_db,
+    test_db_with_rollback,
+)
 from tests.fixtures.docker import docker_test_db  # noqa: F401, E402
 
 
@@ -85,11 +92,4 @@ def mock_target():
     return target
 
 
-@pytest.fixture
-def db_session():
-    """Create a mock database session."""
-    session = MagicMock()
-    session.commit = MagicMock()
-    session.rollback = MagicMock()
-    session.close = MagicMock()
-    return session
+# Note: db_session fixture removed - use test_db from database fixtures instead

@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+
+{% block title %}Create Mission - Hiro{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Header -->
+    <div class="mb-8">
+        <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Create New Mission</h2>
+        <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+            Define a new security testing mission with clear goals and hypothesis
+        </p>
+    </div>
+
+    <!-- Form -->
+    <form method="POST" action="/missions/create" class="space-y-6 bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+        <!-- Target Selection -->
+        <div>
+            <label for="target_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Target <span class="text-red-500">*</span>
+            </label>
+            <select
+                id="target_id"
+                name="target_id"
+                required
+                class="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white"
+            >
+                <option value="">Select a target...</option>
+                {% for target in targets %}
+                <option value="{{ target.id }}" {% if selected_target and selected_target.id == target.id %}selected{% endif %}>
+                    {{ target.host }} - {{ target.name }}
+                </option>
+                {% endfor %}
+            </select>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Choose the target system for this mission
+            </p>
+        </div>
+
+        <!-- Mission Name -->
+        <div>
+            <label for="name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Mission Name <span class="text-red-500">*</span>
+            </label>
+            <input
+                type="text"
+                id="name"
+                name="name"
+                required
+                placeholder="e.g., Extract system prompts from chat endpoint"
+                class="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white"
+            />
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                A descriptive name for this mission
+            </p>
+        </div>
+
+        <!-- Mission Type -->
+        <div>
+            <label for="mission_type" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Mission Type <span class="text-red-500">*</span>
+            </label>
+            <select
+                id="mission_type"
+                name="mission_type"
+                required
+                class="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white"
+            >
+                <option value="general">General Testing</option>
+                <option value="prompt_injection">Prompt Injection</option>
+                <option value="business_logic">Business Logic</option>
+                <option value="auth_bypass">Authentication Bypass</option>
+                <option value="recon">Reconnaissance</option>
+            </select>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Categorize the type of testing
+            </p>
+        </div>
+
+        <!-- Goal -->
+        <div>
+            <label for="goal" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Goal <span class="text-red-500">*</span>
+            </label>
+            <textarea
+                id="goal"
+                name="goal"
+                rows="3"
+                required
+                placeholder="What do you want to achieve with this mission?"
+                class="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white"
+            ></textarea>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Clear, specific objective for this mission
+            </p>
+        </div>
+
+        <!-- Hypothesis -->
+        <div>
+            <label for="hypothesis" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Hypothesis
+            </label>
+            <textarea
+                id="hypothesis"
+                name="hypothesis"
+                rows="3"
+                placeholder="What's your initial hypothesis about vulnerabilities or approach?"
+                class="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white"
+            ></textarea>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Your initial theory about potential vulnerabilities (optional)
+            </p>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
+            <a href="/missions" class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                Cancel
+            </a>
+            <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                Create Mission
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+// Auto-generate mission name based on type and goal
+document.getElementById('mission_type').addEventListener('change', updateMissionName);
+document.getElementById('goal').addEventListener('blur', updateMissionName);
+
+function updateMissionName() {
+    const nameField = document.getElementById('name');
+    if (nameField.value) return; // Don't overwrite existing name
+
+    const type = document.getElementById('mission_type').value;
+    const goal = document.getElementById('goal').value;
+
+    if (!goal) return;
+
+    const typeLabels = {
+        'prompt_injection': 'Prompt Injection',
+        'business_logic': 'Business Logic',
+        'auth_bypass': 'Auth Bypass',
+        'recon': 'Recon',
+        'general': 'Testing'
+    };
+
+    const typeLabel = typeLabels[type] || 'Mission';
+    const shortGoal = goal.split(' ').slice(0, 6).join(' ');
+    nameField.value = `${typeLabel}: ${shortGoal}`;
+}
+</script>
+{% endblock %}

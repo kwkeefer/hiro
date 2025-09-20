@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -24,6 +24,11 @@ from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
+
+try:
+    from pgvector.sqlalchemy import Vector
+except ImportError:
+    Vector = None
 
 
 class Base(AsyncAttrs, DeclarativeBase):
@@ -123,7 +128,9 @@ class Target(Base):
     risk_level: Mapped[RiskLevel] = mapped_column(
         String(10), nullable=False, default=RiskLevel.MEDIUM
     )
-    extra_data: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    extra_data: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
 
     # Link to current context version
     current_context_id: Mapped[UUID | None] = mapped_column(
@@ -163,8 +170,8 @@ class Target(Base):
     requests: Mapped[list["HttpRequest"]] = relationship(
         "HttpRequest", secondary="target_requests", back_populates="targets"
     )
-    sessions: Mapped[list["AiSession"]] = relationship(
-        "AiSession", secondary="session_targets", back_populates="targets"
+    missions: Mapped[list["Mission"]] = relationship(
+        "Mission", secondary="mission_targets", back_populates="targets"
     )
 
     __table_args__ = (
@@ -305,8 +312,8 @@ class TargetAttempt(Base):
         ForeignKey("targets.id", ondelete="CASCADE"),
         nullable=False,
     )
-    session_id: Mapped[UUID | None] = mapped_column(
-        PostgresUUID(as_uuid=True), ForeignKey("ai_sessions.id"), nullable=True
+    mission_id: Mapped[UUID | None] = mapped_column(
+        PostgresUUID(as_uuid=True), ForeignKey("missions.id"), nullable=True
     )
     attempt_type: Mapped[AttemptType] = mapped_column(String(50), nullable=False)
     technique: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -324,8 +331,8 @@ class TargetAttempt(Base):
 
     # Relationships
     target: Mapped["Target"] = relationship("Target", back_populates="attempts")
-    session: Mapped[Optional["AiSession"]] = relationship(
-        "AiSession", back_populates="attempts"
+    mission: Mapped[Optional["Mission"]] = relationship(
+        "Mission", back_populates="attempts"
     )
 
     __table_args__ = (
@@ -335,21 +342,45 @@ class TargetAttempt(Base):
     )
 
 
-class AiSession(Base):
-    """AI reasoning sessions."""
+class Mission(Base):
+    """Security testing missions (formerly AiSession)."""
 
-    __tablename__ = "ai_sessions"
+    __tablename__ = "missions"
 
     id: Mapped[UUID] = mapped_column(
         PostgresUUID(as_uuid=True), primary_key=True, default=uuid4
     )
     name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    objective: Mapped[str | None] = mapped_column(Text, nullable=True)
+    goal: Mapped[str | None] = mapped_column(Text, nullable=True)
+    mission_type: Mapped[str | None] = mapped_column(
+        String(50), nullable=True, default="general"
+    )
+    hypothesis: Mapped[str | None] = mapped_column(Text, nullable=True)
+    scope: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON, nullable=True, default=dict
+    )
+    findings: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON, nullable=True, default=dict
+    )
+    patterns: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON, nullable=True, default=dict
+    )
+    successful_techniques: Mapped[list[str] | None] = mapped_column(
+        ARRAY(String), nullable=True, default=list
+    )
+    confidence_score: Mapped[float | None] = mapped_column(Numeric(3, 2), nullable=True)
+
+    # Vector embeddings for semantic search
+    goal_embedding = mapped_column(Vector(384) if Vector else None, nullable=True)
+    hypothesis_embedding = mapped_column(Vector(384) if Vector else None, nullable=True)
+
     status: Mapped[SessionStatus] = mapped_column(
         String(20), nullable=False, default=SessionStatus.ACTIVE
     )
-    extra_data: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    extra_data: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -359,16 +390,19 @@ class AiSession(Base):
 
     # Relationships
     requests: Mapped[list["HttpRequest"]] = relationship(
-        "HttpRequest", back_populates="session"
+        "HttpRequest", back_populates="mission"
     )
     attempts: Mapped[list["TargetAttempt"]] = relationship(
-        "TargetAttempt", back_populates="session"
+        "TargetAttempt", back_populates="mission"
     )
     targets: Mapped[list["Target"]] = relationship(
-        "Target", secondary="session_targets", back_populates="sessions"
+        "Target", secondary="mission_targets", back_populates="missions"
+    )
+    mission_actions: Mapped[list["MissionAction"]] = relationship(
+        "MissionAction", back_populates="mission"
     )
 
-    __table_args__ = (Index("ix_ai_session_status_created", "status", "created_at"),)
+    __table_args__ = (Index("ix_mission_status_created", "status", "created_at"),)
 
 
 class HttpRequest(Base):
@@ -379,19 +413,19 @@ class HttpRequest(Base):
     id: Mapped[UUID] = mapped_column(
         PostgresUUID(as_uuid=True), primary_key=True, default=uuid4
     )
-    session_id: Mapped[UUID | None] = mapped_column(
-        PostgresUUID(as_uuid=True), ForeignKey("ai_sessions.id"), nullable=True
+    mission_id: Mapped[UUID | None] = mapped_column(
+        PostgresUUID(as_uuid=True), ForeignKey("missions.id"), nullable=True
     )
     method: Mapped[str] = mapped_column(String(10), nullable=False)
     url: Mapped[str] = mapped_column(Text, nullable=False)
     host: Mapped[str] = mapped_column(String(255), nullable=False)
     path: Mapped[str] = mapped_column(Text, nullable=False)
-    query_params: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    headers: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
-    cookies: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    query_params: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    headers: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    cookies: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     request_body: Mapped[str | None] = mapped_column(Text, nullable=True)
     status_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    response_headers: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    response_headers: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     response_body: Mapped[str | None] = mapped_column(Text, nullable=True)
     response_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
     elapsed_ms: Mapped[float | None] = mapped_column(Numeric(10, 3), nullable=True)
@@ -401,8 +435,8 @@ class HttpRequest(Base):
     )
 
     # Relationships
-    session: Mapped[Optional["AiSession"]] = relationship(
-        "AiSession", back_populates="requests"
+    mission: Mapped[Optional["Mission"]] = relationship(
+        "Mission", back_populates="requests"
     )
     targets: Mapped[list["Target"]] = relationship(
         "Target", secondary="target_requests", back_populates="requests"
@@ -410,11 +444,14 @@ class HttpRequest(Base):
     tags: Mapped[list["RequestTag"]] = relationship(
         "RequestTag", back_populates="request", cascade="all, delete-orphan"
     )
+    mission_actions: Mapped[list["MissionAction"]] = relationship(
+        "MissionAction", secondary="action_requests", back_populates="requests"
+    )
 
     __table_args__ = (
         Index("ix_http_request_host_created", "host", "created_at"),
         Index("ix_http_request_method_status", "method", "status_code"),
-        Index("ix_http_request_session", "session_id"),
+        Index("ix_http_request_mission", "mission_id"),
     )
 
 
@@ -446,6 +483,69 @@ class RequestTag(Base):
     )
 
 
+class MissionAction(Base):
+    """Actions taken during security testing missions."""
+
+    __tablename__ = "mission_actions"
+
+    id: Mapped[UUID] = mapped_column(
+        PostgresUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    mission_id: Mapped[UUID | None] = mapped_column(
+        PostgresUUID(as_uuid=True),
+        ForeignKey("missions.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    action_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    technique: Mapped[str] = mapped_column(String(255), nullable=False)
+    payload: Mapped[str | None] = mapped_column(Text, nullable=True)
+    result: Mapped[str | None] = mapped_column(Text, nullable=True)
+    success: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    learning: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Vector embeddings for semantic search
+    action_embedding = mapped_column(Vector(384) if Vector else None, nullable=True)
+    result_embedding = mapped_column(Vector(384) if Vector else None, nullable=True)
+
+    meta_data: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    # Relationships
+    mission: Mapped[Optional["Mission"]] = relationship(
+        "Mission", back_populates="mission_actions"
+    )
+    requests: Mapped[list["HttpRequest"]] = relationship(
+        "HttpRequest", secondary="action_requests", back_populates="mission_actions"
+    )
+
+
+class TechniqueLibrary(Base):
+    """Library of discovered techniques and patterns."""
+
+    __tablename__ = "technique_library"
+
+    id: Mapped[UUID] = mapped_column(
+        PostgresUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    category: Mapped[str] = mapped_column(String(50), nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # Vector embedding for semantic search
+    content_embedding = mapped_column(Vector(384) if Vector else None, nullable=True)
+
+    meta_data: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 # Association tables for many-to-many relationships
 class TargetRequest(Base):
     """Association between targets and HTTP requests."""
@@ -467,14 +567,31 @@ class TargetRequest(Base):
     )
 
 
-class SessionTarget(Base):
-    """Association between AI sessions and targets."""
+class ActionRequest(Base):
+    """Association between mission actions and HTTP requests."""
 
-    __tablename__ = "session_targets"
+    __tablename__ = "action_requests"
 
-    session_id: Mapped[UUID] = mapped_column(
+    action_id: Mapped[UUID] = mapped_column(
         PostgresUUID(as_uuid=True),
-        ForeignKey("ai_sessions.id", ondelete="CASCADE"),
+        ForeignKey("mission_actions.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    request_id: Mapped[UUID] = mapped_column(
+        PostgresUUID(as_uuid=True),
+        ForeignKey("http_requests.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+
+
+class MissionTarget(Base):
+    """Association between missions and targets."""
+
+    __tablename__ = "mission_targets"
+
+    mission_id: Mapped[UUID] = mapped_column(
+        PostgresUUID(as_uuid=True),
+        ForeignKey("missions.id", ondelete="CASCADE"),
         primary_key=True,
     )
     target_id: Mapped[UUID] = mapped_column(

@@ -1,6 +1,7 @@
 """Pydantic schemas for database models validation."""
 
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -32,7 +33,7 @@ class TargetBase(BaseSchema):
     title: str | None = Field(None, description="Target title or service name")
     status: TargetStatus = Field(TargetStatus.ACTIVE, description="Target status")
     risk_level: RiskLevel = Field(RiskLevel.MEDIUM, description="Risk assessment level")
-    extra_data: dict = Field(
+    extra_data: dict[str, Any] = Field(
         default_factory=dict, description="Additional target metadata"
     )
 
@@ -49,7 +50,7 @@ class TargetUpdate(BaseSchema):
     title: str | None = None
     status: TargetStatus | None = None
     risk_level: RiskLevel | None = None
-    extra_data: dict | None = None
+    extra_data: dict[str, Any] | None = None
 
 
 class Target(TargetBase):
@@ -114,7 +115,7 @@ class TargetAttemptCreate(TargetAttemptBase):
     """Schema for creating target attempts."""
 
     target_id: UUID = Field(..., description="Target ID")
-    session_id: UUID | None = Field(None, description="AI session ID")
+    mission_id: UUID | None = Field(None, description="AI session ID")
 
 
 class TargetAttemptUpdate(BaseSchema):
@@ -131,43 +132,51 @@ class TargetAttempt(TargetAttemptBase):
 
     id: UUID
     target_id: UUID
-    session_id: UUID | None
+    mission_id: UUID | None
     actual_outcome: str | None
     success: bool | None
     created_at: datetime
     completed_at: datetime | None
 
 
-# AI Session schemas
-class AiSessionBase(BaseSchema):
-    """Base AI session schema."""
+# Mission schemas (formerly AI Session)
+class MissionBase(BaseSchema):
+    """Base mission schema."""
 
-    name: str | None = Field(None, description="Session name")
-    description: str | None = Field(None, description="Session description")
-    objective: str | None = Field(None, description="Session objective")
-    status: SessionStatus = Field(SessionStatus.ACTIVE, description="Session status")
-    extra_data: dict = Field(default_factory=dict, description="Session metadata")
-
-
-class AiSessionCreate(AiSessionBase):
-    """Schema for creating AI sessions."""
-
-    pass
+    name: str | None = Field(None, description="Mission name")
+    description: str | None = Field(None, description="Mission description")
+    goal: str | None = Field(None, description="Mission goal")
+    mission_type: str | None = Field("general", description="Mission type")
+    hypothesis: str | None = Field(None, description="Mission hypothesis")
+    status: SessionStatus = Field(SessionStatus.ACTIVE, description="Mission status")
+    extra_data: dict[str, Any] = Field(
+        default_factory=dict, description="Mission metadata"
+    )
 
 
-class AiSessionUpdate(BaseSchema):
-    """Schema for updating AI sessions."""
+class MissionCreate(MissionBase):
+    """Schema for creating missions."""
+
+    target_id: UUID | None = Field(
+        None, description="Target ID to associate with mission"
+    )
+
+
+class MissionUpdate(BaseSchema):
+    """Schema for updating missions."""
 
     name: str | None = None
     description: str | None = None
-    objective: str | None = None
+    goal: str | None = None
+    mission_type: str | None = None
+    hypothesis: str | None = None
     status: SessionStatus | None = None
-    extra_data: dict | None = None
+    extra_data: dict[str, Any] | None = None
     completed_at: datetime | None = None
 
 
-class AiSession(AiSessionBase):
-    """Complete AI session schema."""
+class Mission(MissionBase):
+    """Complete mission schema."""
 
     id: UUID
     created_at: datetime
@@ -182,23 +191,23 @@ class HttpRequestBase(BaseSchema):
     url: str = Field(..., description="Request URL")
     host: str = Field(..., description="Target host")
     path: str = Field(..., description="Request path")
-    query_params: dict | None = Field(None, description="Query parameters")
-    headers: dict = Field(default_factory=dict, description="Request headers")
-    cookies: dict | None = Field(None, description="Request cookies")
+    query_params: dict[str, Any] | None = Field(None, description="Query parameters")
+    headers: dict[str, Any] = Field(default_factory=dict, description="Request headers")
+    cookies: dict[str, Any] | None = Field(None, description="Request cookies")
     request_body: str | None = Field(None, description="Request body")
 
 
 class HttpRequestCreate(HttpRequestBase):
     """Schema for creating HTTP requests."""
 
-    session_id: UUID | None = Field(None, description="AI session ID")
+    mission_id: UUID | None = Field(None, description="AI session ID")
 
 
 class HttpRequestUpdate(BaseSchema):
     """Schema for updating HTTP requests with response data."""
 
     status_code: int | None = None
-    response_headers: dict | None = None
+    response_headers: dict[str, Any] | None = None
     response_body: str | None = None
     response_size: int | None = None
     elapsed_ms: float | None = None
@@ -209,9 +218,9 @@ class HttpRequest(HttpRequestBase):
     """Complete HTTP request schema."""
 
     id: UUID
-    session_id: UUID | None
+    mission_id: UUID | None
     status_code: int | None
-    response_headers: dict | None
+    response_headers: dict[str, Any] | None
     response_body: str | None
     response_size: int | None
     elapsed_ms: float | None
@@ -261,7 +270,7 @@ class RequestSearchParams(BaseSchema):
     method: list[str] | None = Field(None, description="Filter by HTTP method")
     status_code: list[int] | None = Field(None, description="Filter by status code")
     tags: list[str] | None = Field(None, description="Filter by tags")
-    session_id: UUID | None = Field(None, description="Filter by session")
+    mission_id: UUID | None = Field(None, description="Filter by session")
     target_id: UUID | None = Field(None, description="Filter by target")
     date_from: datetime | None = Field(None, description="Filter from date")
     date_to: datetime | None = Field(None, description="Filter to date")
@@ -273,7 +282,7 @@ class AttemptSearchParams(BaseSchema):
     """Parameters for attempt search."""
 
     target_id: UUID | None = Field(None, description="Filter by target")
-    session_id: UUID | None = Field(None, description="Filter by session")
+    mission_id: UUID | None = Field(None, description="Filter by session")
     attempt_type: list[AttemptType] | None = Field(
         None, description="Filter by attempt type"
     )
@@ -296,10 +305,10 @@ class TargetSummary(BaseSchema):
     success_rate: float | None = Field(None, description="Success rate of attempts")
 
 
-class SessionSummary(BaseSchema):
-    """Session summary with progress metrics."""
+class MissionSummary(BaseSchema):
+    """Mission summary with progress metrics."""
 
-    session: AiSession
+    mission: Mission
     targets_count: int = Field(..., description="Number of targets")
     requests_count: int = Field(..., description="Number of requests")
     attempts_count: int = Field(..., description="Number of attempts")
@@ -307,3 +316,16 @@ class SessionSummary(BaseSchema):
     duration_minutes: float | None = Field(
         None, description="Session duration in minutes"
     )
+
+
+class MissionActionCreate(BaseSchema):
+    """Schema for creating a mission action."""
+
+    mission_id: UUID = Field(..., description="Mission ID")
+    action_type: str = Field(..., description="Type of action")
+    technique: str = Field(..., description="Technique used")
+    payload: str | None = Field(None, description="Payload used")
+    result: str | None = Field(None, description="Result obtained")
+    success: bool = Field(False, description="Whether action succeeded")
+    learning: str | None = Field(None, description="What was learned")
+    metadata: dict[str, Any] | None = Field(None, description="Additional metadata")

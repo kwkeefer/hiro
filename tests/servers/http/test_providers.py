@@ -25,7 +25,7 @@ class TestHttpToolProvider:
         assert provider._config == config
         assert provider._http_repo is None
         assert provider._target_repo is None
-        assert provider._session_id is None
+        assert provider._mission_id is None
         assert isinstance(provider._http_tool, HttpRequestTool)
 
     @pytest.mark.unit
@@ -35,21 +35,21 @@ class TestHttpToolProvider:
         config = HttpConfig()
         mock_http_repo = MagicMock()
         mock_target_repo = MagicMock()
-        session_id = "test-session-123"
+        mission_id = "test-session-123"
 
         # Act
         provider = HttpToolProvider(
             config=config,
             http_repo=mock_http_repo,
             target_repo=mock_target_repo,
-            session_id=session_id,
+            mission_id=mission_id,
         )
 
         # Assert
         assert provider._config == config
         assert provider._http_repo == mock_http_repo
         assert provider._target_repo == mock_target_repo
-        assert provider._session_id == session_id
+        assert provider._mission_id == mission_id
         assert isinstance(provider._http_tool, HttpRequestTool)
 
     @pytest.mark.unit
@@ -91,11 +91,11 @@ class TestHttpToolProvider:
             tracing_headers={"X-Custom": "header"},
         )
         mock_http_repo = MagicMock()
-        session_id = "session-456"
+        mission_id = "session-456"
 
         # Act
         provider = HttpToolProvider(
-            config=config, http_repo=mock_http_repo, session_id=session_id
+            config=config, http_repo=mock_http_repo, mission_id=mission_id
         )
 
         # Assert
@@ -104,7 +104,7 @@ class TestHttpToolProvider:
         assert tool._config.verify_ssl is False
         assert tool._config.tracing_headers == {"X-Custom": "header"}
         assert tool._http_repo == mock_http_repo
-        assert tool._session_id == session_id
+        assert tool._mission_id == mission_id
 
     @pytest.mark.unit
     def test_multiple_providers_independent(self):
@@ -169,28 +169,28 @@ class TestHttpToolProvider:
         assert provider.http_tool._config.timeout == 30.0
 
     @pytest.mark.unit
-    def test_provider_session_id_handling(self):
+    def test_provider_mission_id_handling(self):
         """Test session ID is properly passed to tool."""
         # Arrange
         config = HttpConfig()
-        session_id = "550e8400-e29b-41d4-a716-446655440000"
+        mission_id = "550e8400-e29b-41d4-a716-446655440000"
 
         # Act
-        provider = HttpToolProvider(config=config, session_id=session_id)
+        provider = HttpToolProvider(config=config, mission_id=mission_id)
 
         # Assert
-        assert provider._session_id == session_id
-        assert provider.http_tool._session_id == session_id
+        assert provider._mission_id == mission_id
+        assert provider.http_tool._mission_id == mission_id
 
     @pytest.mark.unit
-    def test_provider_none_session_id(self):
+    def test_provider_none_mission_id(self):
         """Test provider handles None session ID correctly."""
         # Arrange
         config = HttpConfig()
 
         # Act
-        provider = HttpToolProvider(config=config, session_id=None)
+        provider = HttpToolProvider(config=config, mission_id=None)
 
         # Assert
-        assert provider._session_id is None
-        assert provider.http_tool._session_id is None
+        assert provider._mission_id is None
+        assert provider.http_tool._mission_id is None

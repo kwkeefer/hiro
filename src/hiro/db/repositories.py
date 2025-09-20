@@ -1,7 +1,6 @@
 """Data access layer for database operations."""
 
 from datetime import UTC, datetime, timedelta
-from typing import cast
 from urllib.parse import urlparse
 from uuid import UUID
 
@@ -10,12 +9,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.ext.asyncio.session import async_sessionmaker
 
 from .models import (
-    AiSession,
+    ActionRequest,
     ContextChangeType,
     HttpRequest,
+    Mission,
+    MissionAction,
+    MissionTarget,
     RequestTag,
     RiskLevel,
-    SessionTarget,
     Target,
     TargetAttempt,
     TargetContext,
@@ -24,14 +25,15 @@ from .models import (
     TargetStatus,
 )
 from .schemas import (
-    AiSessionCreate,
-    AiSessionUpdate,
     AttemptSearchParams,
     HttpRequestCreate,
     HttpRequestUpdate,
+    MissionActionCreate,
+    MissionCreate,
+    MissionSummary,
+    MissionUpdate,
     RequestSearchParams,
     RequestTagCreate,
-    SessionSummary,
     TargetAttemptCreate,
     TargetAttemptUpdate,
     TargetCreate,
@@ -40,6 +42,12 @@ from .schemas import (
     TargetSearchParams,
     TargetSummary,
     TargetUpdate,
+)
+from .schemas import (
+    Mission as MissionSchema,
+)
+from .schemas import (
+    Target as TargetSchema,
 )
 
 
@@ -93,12 +101,12 @@ class TargetRepository:
                 result = await session.execute(
                     select(Target).where(Target.id == target_id)
                 )
-                return cast(Target | None, result.scalar_one_or_none())
+                return result.scalar_one_or_none()  # type: ignore[no-any-return]
         else:
             result = await self.session.execute(
                 select(Target).where(Target.id == target_id)
             )
-            return cast(Target | None, result.scalar_one_or_none())
+            return result.scalar_one_or_none()  # type: ignore[no-any-return]
 
     async def get_by_endpoint(
         self, host: str, port: int | None, protocol: str
@@ -115,7 +123,7 @@ class TargetRepository:
                         )
                     )
                 )
-                return cast(Target | None, result.scalar_one_or_none())
+                return result.scalar_one_or_none()  # type: ignore[no-any-return]
         else:
             result = await self.session.execute(
                 select(Target).where(
@@ -126,7 +134,7 @@ class TargetRepository:
                     )
                 )
             )
-            return cast(Target | None, result.scalar_one_or_none())
+            return result.scalar_one_or_none()  # type: ignore[no-any-return]
 
     async def get_or_create_from_url(self, url: str) -> Target:
         """Get or create target from URL."""
@@ -194,6 +202,13 @@ class TargetRepository:
                 .values(last_activity=datetime.now(UTC))
             )
             await self.session.commit()
+
+    async def list_all(self) -> list[Target]:
+        """Get all targets."""
+        result = await self.session.execute(
+            select(Target).order_by(Target.created_at.desc())
+        )
+        return list(result.scalars().all())
 
     async def search(self, params: TargetSearchParams) -> list[Target]:
         """Search targets with filters."""
@@ -297,11 +312,13 @@ class TargetRepository:
             )
 
         success_rate = (
-            (successful_attempts / attempts_count) if attempts_count > 0 else None
+            (successful_attempts / attempts_count)
+            if attempts_count and successful_attempts is not None and attempts_count > 0
+            else None
         )
 
         return TargetSummary(
-            target=target,
+            target=TargetSchema.model_validate(target),
             notes_count=notes_count or 0,
             attempts_count=attempts_count or 0,
             requests_count=requests_count or 0,
@@ -344,7 +361,7 @@ class TargetNoteRepository:
         result = await self.session.execute(
             select(TargetNote).where(TargetNote.id == note_id)
         )
-        return cast(TargetNote | None, result.scalar_one_or_none())
+        return result.scalar_one_or_none()  # type: ignore[no-any-return]
 
     async def get_by_target(
         self, target_id: UUID, note_type: str | None = None
@@ -426,7 +443,7 @@ class TargetAttemptRepository:
         result = await self.session.execute(
             select(TargetAttempt).where(TargetAttempt.id == attempt_id)
         )
-        return cast(TargetAttempt | None, result.scalar_one_or_none())
+        return result.scalar_one_or_none()  # type: ignore[no-any-return]
 
     async def update(
         self, attempt_id: UUID, attempt_data: TargetAttemptUpdate
@@ -451,8 +468,8 @@ class TargetAttemptRepository:
         if params.target_id:
             query = query.where(TargetAttempt.target_id == params.target_id)
 
-        if params.session_id:
-            query = query.where(TargetAttempt.session_id == params.session_id)
+        if params.mission_id:
+            query = query.where(TargetAttempt.mission_id == params.mission_id)
 
         if params.attempt_type:
             query = query.where(TargetAttempt.attempt_type.in_(params.attempt_type))
@@ -525,12 +542,12 @@ class HttpRequestRepository:
                 result = await session.execute(
                     select(HttpRequest).where(HttpRequest.id == request_id)
                 )
-                return cast(HttpRequest | None, result.scalar_one_or_none())
+                return result.scalar_one_or_none()  # type: ignore[no-any-return]
         else:
             result = await self.session.execute(
                 select(HttpRequest).where(HttpRequest.id == request_id)
             )
-            return cast(HttpRequest | None, result.scalar_one_or_none())
+            return result.scalar_one_or_none()  # type: ignore[no-any-return]
 
     async def update(
         self, request_id: UUID, request_data: HttpRequestUpdate
@@ -614,8 +631,8 @@ class HttpRequestRepository:
         if params.status_code:
             query = query.where(HttpRequest.status_code.in_(params.status_code))
 
-        if params.session_id:
-            query = query.where(HttpRequest.session_id == params.session_id)
+        if params.mission_id:
+            query = query.where(HttpRequest.mission_id == params.mission_id)
 
         if params.target_id:
             query = query.join(TargetRequest).where(
@@ -649,86 +666,116 @@ class HttpRequestRepository:
         return int(result.rowcount or 0)
 
 
-class AiSessionRepository:
-    """Repository for AI session operations."""
+class MissionRepository:
+    """Repository for mission operations."""
 
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def create(self, session_data: AiSessionCreate) -> AiSession:
-        """Create a new AI session."""
-        ai_session = AiSession(**session_data.model_dump())
-        self.session.add(ai_session)
-        await self.session.flush()
-        await self.session.refresh(ai_session)
-        return ai_session
+    async def create(self, mission_data: MissionCreate) -> Mission:
+        """Create a new mission."""
+        # Exclude target_id from the data since it's not a direct field on Mission
+        data = mission_data.model_dump(exclude={"target_id"})
 
-    async def get_by_id(self, session_id: UUID) -> AiSession | None:
-        """Get session by ID."""
+        # Ensure status is a string (not enum) for SQLAlchemy
+        if "status" in data and hasattr(data["status"], "value"):
+            data["status"] = data["status"].value
+
+        mission = Mission(**data)
+        self.session.add(mission)
+        await self.session.flush()
+        await self.session.refresh(mission)
+        return mission
+
+    async def get_by_id(self, mission_id: UUID) -> Mission | None:
+        """Get mission by ID."""
         result = await self.session.execute(
-            select(AiSession).where(AiSession.id == session_id)
+            select(Mission).where(Mission.id == mission_id)
         )
-        return cast(AiSession | None, result.scalar_one_or_none())
+        return result.scalar_one_or_none()  # type: ignore[no-any-return]
 
     async def update(
-        self, session_id: UUID, session_data: AiSessionUpdate
-    ) -> AiSession | None:
-        """Update session."""
-        update_data = session_data.model_dump(exclude_unset=True)
+        self, mission_id: UUID, mission_data: MissionUpdate
+    ) -> Mission | None:
+        """Update mission."""
+        update_data = mission_data.model_dump(exclude_unset=True)
         if not update_data:
-            return await self.get_by_id(session_id)
+            return await self.get_by_id(mission_id)
 
         await self.session.execute(
-            update(AiSession).where(AiSession.id == session_id).values(**update_data)
+            update(Mission).where(Mission.id == mission_id).values(**update_data)
         )
 
-        return await self.get_by_id(session_id)
+        return await self.get_by_id(mission_id)
 
-    async def associate_target(self, session_id: UUID, target_id: UUID) -> None:
-        """Associate session with target."""
+    async def get(self, mission_id: UUID) -> Mission | None:
+        """Get mission by ID (alias for get_by_id)."""
+        return await self.get_by_id(mission_id)
+
+    async def update_embeddings(
+        self,
+        mission_id: UUID,
+        goal_embedding: list[float] | None = None,
+        hypothesis_embedding: list[float] | None = None,
+    ) -> None:
+        """Update mission embeddings."""
+        updates = {}
+        if goal_embedding is not None:
+            updates["goal_embedding"] = goal_embedding
+        if hypothesis_embedding is not None:
+            updates["hypothesis_embedding"] = hypothesis_embedding
+
+        if updates:
+            await self.session.execute(
+                update(Mission).where(Mission.id == mission_id).values(**updates)
+            )
+            await self.session.flush()
+
+    async def associate_target(self, mission_id: UUID, target_id: UUID) -> None:
+        """Associate mission with target."""
         # Check if association already exists
         existing = await self.session.execute(
-            select(SessionTarget).where(
+            select(MissionTarget).where(
                 and_(
-                    SessionTarget.session_id == session_id,
-                    SessionTarget.target_id == target_id,
+                    MissionTarget.mission_id == mission_id,
+                    MissionTarget.target_id == target_id,
                 )
             )
         )
 
         if not existing.scalar_one_or_none():
-            link = SessionTarget(session_id=session_id, target_id=target_id)
+            link = MissionTarget(mission_id=mission_id, target_id=target_id)
             self.session.add(link)
 
-    async def get_summary(self, session_id: UUID) -> SessionSummary | None:
-        """Get session summary with metrics."""
-        session = await self.get_by_id(session_id)
-        if not session:
+    async def get_summary(self, mission_id: UUID) -> MissionSummary | None:
+        """Get mission summary with metrics."""
+        mission = await self.get_by_id(mission_id)
+        if not mission:
             return None
 
         # Count related records
         targets_count = await self.session.scalar(
-            select(func.count(SessionTarget.target_id)).where(
-                SessionTarget.session_id == session_id
+            select(func.count(MissionTarget.target_id)).where(
+                MissionTarget.mission_id == mission_id
             )
         )
 
         requests_count = await self.session.scalar(
             select(func.count(HttpRequest.id)).where(
-                HttpRequest.session_id == session_id
+                HttpRequest.mission_id == mission_id
             )
         )
 
         attempts_count = await self.session.scalar(
             select(func.count(TargetAttempt.id)).where(
-                TargetAttempt.session_id == session_id
+                TargetAttempt.mission_id == mission_id
             )
         )
 
         successful_attempts = await self.session.scalar(
             select(func.count(TargetAttempt.id)).where(
                 and_(
-                    TargetAttempt.session_id == session_id,
+                    TargetAttempt.mission_id == mission_id,
                     TargetAttempt.success.is_(True),
                 )
             )
@@ -736,18 +783,106 @@ class AiSessionRepository:
 
         # Calculate duration
         duration_minutes = None
-        if session.completed_at:
-            duration = session.completed_at - session.created_at
+        if mission.completed_at:
+            duration = mission.completed_at - mission.created_at
             duration_minutes = duration.total_seconds() / 60
 
-        return SessionSummary(
-            session=session,
+        return MissionSummary(
+            mission=MissionSchema.model_validate(mission),
             targets_count=targets_count or 0,
             requests_count=requests_count or 0,
             attempts_count=attempts_count or 0,
             successful_attempts=successful_attempts or 0,
             duration_minutes=duration_minutes,
         )
+
+
+class MissionActionRepository:
+    """Repository for mission action operations."""
+
+    def __init__(self, session: AsyncSession):
+        self.session = session
+
+    async def create(self, action_data: MissionActionCreate) -> MissionAction:
+        """Create a new mission action."""
+        action = MissionAction(**action_data.model_dump())
+        self.session.add(action)
+        await self.session.flush()
+        await self.session.refresh(action)
+        return action
+
+    async def get(self, action_id: UUID) -> MissionAction | None:
+        """Get action by ID."""
+        result = await self.session.execute(
+            select(MissionAction).where(MissionAction.id == action_id)
+        )
+        return result.scalar_one_or_none()  # type: ignore[no-any-return]
+
+    async def get_by_mission(
+        self, mission_id: UUID, limit: int = 10
+    ) -> list[MissionAction]:
+        """Get recent actions for a mission."""
+        result = await self.session.execute(
+            select(MissionAction)
+            .where(MissionAction.mission_id == mission_id)
+            .order_by(MissionAction.created_at.desc())
+            .limit(limit)
+        )
+        return list(result.scalars().all())
+
+    async def update_embeddings(
+        self,
+        action_id: UUID,
+        action_embedding: list[float] | None = None,
+        result_embedding: list[float] | None = None,
+    ) -> None:
+        """Update action embeddings."""
+        updates = {}
+        if action_embedding is not None:
+            updates["action_embedding"] = action_embedding
+        if result_embedding is not None:
+            updates["result_embedding"] = result_embedding
+
+        if updates:
+            await self.session.execute(
+                update(MissionAction)
+                .where(MissionAction.id == action_id)
+                .values(**updates)
+            )
+            await self.session.flush()
+
+    async def link_recent_requests(
+        self, action_id: UUID, mission_id: UUID, count: int = 5
+    ) -> int:
+        """Link recent HTTP requests to an action."""
+        # Get recent requests for the mission
+        result = await self.session.execute(
+            select(HttpRequest.id)
+            .where(HttpRequest.mission_id == mission_id)
+            .order_by(HttpRequest.created_at.desc())
+            .limit(count)
+        )
+        request_ids = result.scalars().all()
+
+        # Create links
+        linked_count = 0
+        for request_id in request_ids:
+            # Check if link already exists
+            existing = await self.session.execute(
+                select(ActionRequest).where(
+                    and_(
+                        ActionRequest.action_id == action_id,
+                        ActionRequest.request_id == request_id,
+                    )
+                )
+            )
+            if not existing.scalar_one_or_none():
+                link = ActionRequest(action_id=action_id, request_id=request_id)
+                self.session.add(link)
+                linked_count += 1
+
+        await self.session.flush()
+        return linked_count
 
 
 class RequestTagRepository:
@@ -788,6 +923,9 @@ class TargetContextRepository:
         self, session_or_factory: async_sessionmaker[AsyncSession] | AsyncSession
     ):
         # Support both session factory and direct session for backward compatibility
+        self.session_factory: async_sessionmaker[AsyncSession] | None
+        self.session: AsyncSession | None
+
         if isinstance(session_or_factory, async_sessionmaker):
             self.session_factory = session_or_factory
             self.session = None
@@ -837,7 +975,8 @@ class TargetContextRepository:
                 TargetContext.target_id == target_id
             )
         )
-        next_version = result.scalar() + 1
+        current_version = result.scalar()
+        next_version = (current_version or 0) + 1
 
         # If no parent specified, get the current version
         if parent_version_id is None:
@@ -901,7 +1040,7 @@ class TargetContextRepository:
         result = await session.execute(
             select(TargetContext).where(TargetContext.id == current_id)
         )
-        return cast(TargetContext | None, result.scalar_one_or_none())
+        return result.scalar_one_or_none()  # type: ignore[no-any-return]
 
     async def get_version(self, context_id: UUID) -> TargetContext | None:
         """Get a specific context version by ID."""
@@ -909,7 +1048,7 @@ class TargetContextRepository:
         result = await session.execute(
             select(TargetContext).where(TargetContext.id == context_id)
         )
-        return cast(TargetContext | None, result.scalar_one_or_none())
+        return result.scalar_one_or_none()  # type: ignore[no-any-return]
 
     async def list_versions(
         self, target_id: UUID, limit: int = 10, offset: int = 0
@@ -960,7 +1099,7 @@ class TargetContextRepository:
         query = query.order_by(TargetContext.created_at.desc()).limit(limit)
 
         result = await session.execute(query)
-        return list(result.all())
+        return result.all()  # type: ignore[no-any-return]
 
     async def get_version_by_number(
         self, target_id: UUID, version: int
@@ -975,7 +1114,7 @@ class TargetContextRepository:
                 )
             )
         )
-        return cast(TargetContext | None, result.scalar_one_or_none())
+        return result.scalar_one_or_none()  # type: ignore[no-any-return]
 
     async def rollback_to_version(
         self, target_id: UUID, version_id: UUID

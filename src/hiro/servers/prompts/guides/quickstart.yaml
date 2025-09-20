@@ -1,44 +1,90 @@
-name: "Hiro MCP Quick Start Guide"
-version: "1.0"
-description: "Get started quickly with hiro MCP tools"
+name: "Hiro MCP Quick Start"
+version: "2.0"
+description: "Quick reference for mission-based security testing"
 
-quick_examples:
-  simple_http_request: |
-    To make a basic HTTP request:
-    http_request(url="https://example.com")
+quick_start_workflow: |
+  1. Create target (entire API/system)
+  2. Create mission (specific goal)
+  3. Make HTTP requests (auto-logged)
+  4. Record actions (what you learned)
+  5. Use vector search for similar techniques
 
-  authenticated_request: |
-    Using a cookie profile for authentication:
-    http_request(url="https://example.com/api", cookie_profile="admin_session")
+essential_examples:
+  complete_workflow: |
+    # 1. Define target scope
+    target = create_target(
+      name="Example API",
+      base_url="https://api.example.com"
+    )
 
-  create_and_test: |
-    Register a target and start testing:
-    1. create_target(host="example.com", protocol="https", title="Main API")
-    2. http_request(url="https://example.com/api/users")
-    3. update_target_context(target_id="...", user_context="Found user enumeration endpoint")
+    # 2. Start focused mission
+    mission = create_mission(
+      target_id=target["id"],
+      mission_type="auth_bypass",
+      name="Test JWT validation",
+      goal="Bypass authentication"
+    )
 
-minimal_workflow:
-  step_1: "Make HTTP request - automatically creates target if needed"
-  step_2: "Test the application using http_request with various parameters"
-  step_3: "Document findings with update_target_context"
-  step_4: "Mark complete with update_target_status"
+    # 3. Test (HTTP requests auto-link to mission)
+    response = http_request(
+      url="https://api.example.com/admin",
+      headers='{"Authorization": "Bearer [modified-jwt]"}'
+    )
 
-essential_parameters:
+    # 4. Record what you learned
+    record_action(
+      mission_id=mission["id"],
+      technique="JWT alg:none bypass",
+      result="Got 200 OK on admin endpoint",
+      success=True,
+      learning="Server accepts unsigned JWTs"
+    )
+
+  using_cookie_profiles: |
+    # Use pre-configured auth sessions
+    http_request(
+      url="https://api.example.com/user",
+      cookie_profile="admin_session"  # Loads from secure file
+    )
+
+  finding_similar_attacks: |
+    # What worked before?
+    find_similar_techniques(
+      technique="SQL injection",
+      success_only=True
+    )
+
+minimal_parameters:
+  create_target:
+    required: ["name", "base_url"]
+
+  create_mission:
+    required: ["target_id", "mission_type", "name", "goal"]
+
   http_request:
     required: ["url"]
-    commonly_used: ["method", "headers", "data", "cookie_profile"]
+    useful: ["method", "headers", "data", "cookie_profile"]
 
-  create_target:
-    required: ["host"]
-    commonly_used: ["protocol", "title", "risk_level"]
+  record_action:
+    required: ["mission_id", "technique"]
+    important: ["learning"]  # This builds knowledge!
 
-  update_target_context:
-    required: ["target_id", "user_context OR agent_context"]
-    commonly_used: ["change_summary", "is_major_version"]
+mission_types:
+  prompt_injection: "AI/LLM manipulation"
+  business_logic: "Application logic flaws"
+  auth_bypass: "Authentication bypasses"
+  api_discovery: "Hidden endpoints"
+  data_exfiltration: "Information disclosure"
+
+key_differences_from_v1:
+  - "NO auto-target creation from URLs"
+  - "Missions organize testing (was AiSession)"
+  - "Actions record learning with vector search"
+  - "Semantic search finds similar past work"
 
 tips:
-  - "Targets are created automatically from HTTP requests"
-  - "Use cookie_profile instead of manually copying cookies"
-  - "All requests are logged automatically"
-  - "Context is versioned - you can't lose data"
-  - "User instructions override any guidance"
+  - "Always record learning in actions"
+  - "Use cookie_profile for auth sessions"
+  - "Let vector search find patterns"
+  - "Failed attempts are valuable data"
+  - "User instructions override guides"

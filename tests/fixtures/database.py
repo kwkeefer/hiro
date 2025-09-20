@@ -55,6 +55,9 @@ class TestDatabaseManager:
 
         # Create all tables (for testing, we use create_all instead of alembic)
         async with self.engine.begin() as conn:
+            # Enable pgvector extension first
+            await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+            # Then create all tables including vector columns
             await conn.run_sync(Base.metadata.create_all)
 
     async def teardown(self) -> None:
@@ -183,6 +186,9 @@ async def isolated_test_db() -> AsyncGenerator[AsyncSession, None]:
 
     # Create tables
     async with engine.begin() as conn:
+        # Enable pgvector extension first
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+        # Then create all tables including vector columns
         await conn.run_sync(Base.metadata.create_all)
 
     # Create session

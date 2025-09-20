@@ -5,8 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from hiro.db.models import AttemptType
 from hiro.db.repositories import (
-    AiSessionRepository,
     HttpRequestRepository,
+    MissionRepository,
     TargetAttemptRepository,
     TargetNoteRepository,
     TargetRepository,
@@ -32,7 +32,7 @@ __all__ = [
     "target_repo",
     "note_repo",
     "attempt_repo",
-    "session_repo",
+    "mission_repo",
     "request_repo",
     "create_target_tool",
     "update_target_tool",
@@ -60,9 +60,9 @@ async def attempt_repo(test_db: AsyncSession) -> TargetAttemptRepository:
 
 
 @pytest_asyncio.fixture
-async def session_repo(test_db: AsyncSession) -> AiSessionRepository:
-    """Provide AiSessionRepository with test database."""
-    return AiSessionRepository(test_db)
+async def mission_repo(test_db: AsyncSession) -> MissionRepository:
+    """Provide MissionRepository with test database."""
+    return MissionRepository(test_db)
 
 
 @pytest_asyncio.fixture

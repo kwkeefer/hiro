@@ -69,7 +69,7 @@ class TargetService:
             )
         )
         result = await self.db.execute(query)
-        return result.scalar_one_or_none()  # type: ignore
+        return result.scalar_one_or_none()  # type: ignore[no-any-return]
 
     async def update_target(
         self, target_id: UUID, updates: dict[str, Any]
@@ -98,7 +98,7 @@ class TargetService:
             .where(Target.id == target_id)
         )
         result = await self.db.execute(query)
-        return result.scalar_one_or_none()  # type: ignore
+        return result.scalar_one_or_none()  # type: ignore[no-any-return]
 
     async def update_context(
         self,
@@ -187,4 +187,4 @@ class TargetService:
             .where(TargetContext.version == version)
         )
         result = await self.db.execute(query)
-        return result.scalar_one_or_none()  # type: ignore
+        return result.scalar_one_or_none()  # type: ignore[no-any-return]
