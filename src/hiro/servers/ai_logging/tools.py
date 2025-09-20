@@ -736,6 +736,35 @@ class GetTargetContextTool:
             ) from e
 
 
+class UpdateTargetContextParams(BaseModel):
+    """Parameters for updating target context."""
+
+    target_id: str = Field(description="UUID of the target")
+    user_context: str | None = Field(
+        None, description="Updated user context (replaces existing)"
+    )
+    agent_context: str | None = Field(
+        None, description="Updated agent context (replaces existing)"
+    )
+    append_mode: bool = Field(
+        False,
+        description="Append to existing context instead of replacing (accepts true/false or 'true'/'false')",
+    )
+    change_summary: str | None = Field(None, description="Summary of what changed")
+    is_major_version: bool = Field(
+        False,
+        description="Whether this is a major version (accepts true/false or 'true'/'false')",
+    )
+
+    @field_validator("append_mode", "is_major_version", mode="before")
+    @classmethod
+    def coerce_boolean(cls, v: Any) -> bool:
+        """Convert string boolean values to actual booleans."""
+        if isinstance(v, str):
+            return v.lower() in ("true", "1", "yes", "on")
+        return bool(v) if v is not None else False
+
+
 class UpdateTargetContextTool:
     """Tool for updating target context (creates new version)."""
 
@@ -763,13 +792,19 @@ class UpdateTargetContextTool:
             str | None, Field(description="Updated agent context (replaces existing)")
         ] = None,
         append_mode: Annotated[
-            bool, Field(description="Append to existing context instead of replacing")
+            bool | str,
+            Field(
+                description="Append to existing context instead of replacing (accepts true/false or 'true'/'false')"
+            ),
         ] = False,
         change_summary: Annotated[
             str | None, Field(description="Summary of what changed")
         ] = None,
         is_major_version: Annotated[
-            bool, Field(description="Whether this is a major version")
+            bool | str,
+            Field(
+                description="Whether this is a major version (accepts true/false or 'true'/'false')"
+            ),
         ] = False,
     ) -> dict[str, Any]:
         """Update target context (creates new immutable version).
@@ -799,42 +834,62 @@ class UpdateTargetContextTool:
                 "update_target_context", "Database not configured for target management"
             )
 
+        # Create and validate parameters using Pydantic model (handles boolean coercion)
+        try:
+            # Pydantic will handle string->bool conversion via our validator
+            params = UpdateTargetContextParams(
+                target_id=target_id,
+                user_context=user_context,
+                agent_context=agent_context,
+                append_mode=append_mode,  # type: ignore[arg-type]
+                change_summary=change_summary,
+                is_major_version=is_major_version,  # type: ignore[arg-type]
+            )
+        except Exception as e:
+            raise ToolError(
+                "update_target_context", f"Invalid parameters: {str(e)}"
+            ) from e
+
         try:
             # Validate UUID format
-            target_uuid = UUID(target_id)
+            target_uuid = UUID(params.target_id)
 
             # Check target exists
             target = await self._target_repo.get_by_id(target_uuid)
             if not target:
                 raise ToolError(
-                    "update_target_context", f"Target not found: {target_id}"
+                    "update_target_context", f"Target not found: {params.target_id}"
                 )
 
             # Get current context to potentially append to
             current = await self._context_repo.get_current(target_uuid)
 
             # Prepare new context values
-            new_user_context = user_context
-            new_agent_context = agent_context
+            new_user_context = params.user_context
+            new_agent_context = params.agent_context
 
-            if append_mode and current:
+            if params.append_mode and current:
                 # Append to existing context
-                if user_context:
+                if params.user_context:
                     existing_user = current.user_context or ""
-                    new_user_context = f"{existing_user}\n\n{user_context}".strip()
+                    new_user_context = (
+                        f"{existing_user}\n\n{params.user_context}".strip()
+                    )
                 else:
                     new_user_context = current.user_context
 
-                if agent_context:
+                if params.agent_context:
                     existing_agent = current.agent_context or ""
-                    new_agent_context = f"{existing_agent}\n\n{agent_context}".strip()
+                    new_agent_context = (
+                        f"{existing_agent}\n\n{params.agent_context}".strip()
+                    )
                 else:
                     new_agent_context = current.agent_context
-            elif not append_mode and current:
+            elif not params.append_mode and current:
                 # Replace mode but keep unchanged fields
-                if user_context is None:
+                if params.user_context is None:
                     new_user_context = current.user_context
-                if agent_context is None:
+                if params.agent_context is None:
                     new_agent_context = current.agent_context
 
             # Determine change type
@@ -854,11 +909,11 @@ class UpdateTargetContextTool:
                 user_context=new_user_context,
                 agent_context=new_agent_context,
                 created_by=created_by,
-                change_summary=change_summary
-                or ("Appended context" if append_mode else "Updated context"),
+                change_summary=params.change_summary
+                or ("Appended context" if params.append_mode else "Updated context"),
                 change_type=change_type,
                 parent_version_id=current.id if current else None,
-                is_major_version=is_major_version,
+                is_major_version=params.is_major_version,
             )
 
             return {
@@ -868,7 +923,7 @@ class UpdateTargetContextTool:
                 "previous_version": current.version if current else None,
                 "target_id": str(context.target_id),
                 "created_at": context.created_at.isoformat(),
-                "append_mode": append_mode,
+                "append_mode": params.append_mode,
                 "message": f"Updated context to version {context.version} for target {target.host}",
             }
 
