@@ -347,7 +347,7 @@ def serve_http(
                         LazyMissionActionRepository,
                         LazyMissionRepository,
                     )
-                    from hiro.servers.missions import SimplifiedMissionProvider
+                    from hiro.servers.missions import MissionToolProvider
 
                     mission_repo = LazyMissionRepository(settings.database)
                     action_repo = LazyMissionActionRepository(settings.database)
@@ -358,7 +358,7 @@ def serve_http(
                         else None
                     )
 
-                    mission_provider = SimplifiedMissionProvider(  # type: ignore[abstract]
+                    mission_provider = MissionToolProvider(  # type: ignore[abstract]
                         mission_repo=mission_repo,  # type: ignore[arg-type]
                         action_repo=action_repo,  # type: ignore[arg-type]
                         request_repo=http_repo,  # type: ignore[arg-type]

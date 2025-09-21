@@ -125,10 +125,14 @@ async def auto_migrate_database(settings: DatabaseSettings) -> bool:
     Returns:
         bool: True if migrations were successful or not needed, False on error
     """
+    import asyncio
     from pathlib import Path
 
     from alembic import command
     from alembic.config import Config
+    from alembic.runtime.migration import MigrationContext
+    from alembic.script import ScriptDirectory
+    from sqlalchemy import create_engine
 
     try:
         # Test connection first
@@ -156,9 +160,31 @@ async def auto_migrate_database(settings: DatabaseSettings) -> bool:
             logger.error("Could not find alembic.ini configuration file")
             return False
 
-        logger.info("Running database migrations...")
+        # Check if migration is needed using sync engine
+        if not settings.url:
+            logger.error("Database URL not configured")
+            return False
+        sync_engine = create_engine(settings.url.replace("+asyncpg", ""))
+        with sync_engine.connect() as connection:
+            context = MigrationContext.configure(connection)
+            current_rev = context.get_current_revision()
+
         alembic_cfg = Config(alembic_ini)
-        command.upgrade(alembic_cfg, "head")
+        script = ScriptDirectory.from_config(alembic_cfg)
+        head_rev = script.get_current_head()
+
+        if current_rev == head_rev:
+            logger.info(f"Database schema is up to date (revision: {current_rev})")
+            sync_engine.dispose()
+            return True
+
+        logger.info(f"Running database migrations from {current_rev} to {head_rev}...")
+
+        # Run migrations in a thread pool to avoid blocking async context
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, command.upgrade, alembic_cfg, "head")
+
+        sync_engine.dispose()
         logger.info("Database migrations completed successfully")
         return True
 

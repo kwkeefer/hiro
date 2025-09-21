@@ -56,35 +56,6 @@ class RiskLevel(str, Enum):
     CRITICAL = "critical"
 
 
-class NoteType(str, Enum):
-    """Note type options."""
-
-    RECONNAISSANCE = "reconnaissance"
-    VULNERABILITY = "vulnerability"
-    CONFIGURATION = "configuration"
-    ACCESS = "access"
-    OTHER = "other"
-
-
-class ConfidenceLevel(str, Enum):
-    """Confidence level options."""
-
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-
-
-class AttemptType(str, Enum):
-    """Attempt type options."""
-
-    SCAN = "scan"
-    EXPLOIT = "exploit"
-    ENUMERATE = "enumerate"
-    BYPASS = "bypass"
-    ESCALATE = "escalate"
-    OTHER = "other"
-
-
 class SessionStatus(str, Enum):
     """Session status options."""
 
@@ -160,12 +131,6 @@ class Target(Base):
         back_populates="target",
         cascade="all, delete-orphan",
         order_by="desc(TargetContext.version)",
-    )
-    notes: Mapped[list["TargetNote"]] = relationship(
-        "TargetNote", back_populates="target", cascade="all, delete-orphan"
-    )
-    attempts: Mapped[list["TargetAttempt"]] = relationship(
-        "TargetAttempt", back_populates="target", cascade="all, delete-orphan"
     )
     requests: Mapped[list["HttpRequest"]] = relationship(
         "HttpRequest", secondary="target_requests", back_populates="targets"
@@ -260,88 +225,6 @@ class TargetContext(Base):
     )
 
 
-class TargetNote(Base):
-    """Notes and observations about targets."""
-
-    __tablename__ = "target_notes"
-
-    id: Mapped[UUID] = mapped_column(
-        PostgresUUID(as_uuid=True), primary_key=True, default=uuid4
-    )
-    target_id: Mapped[UUID] = mapped_column(
-        PostgresUUID(as_uuid=True),
-        ForeignKey("targets.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    note_type: Mapped[NoteType] = mapped_column(String(50), nullable=False)
-    title: Mapped[str] = mapped_column(String(255), nullable=False)
-    content: Mapped[str] = mapped_column(Text, nullable=False)
-    tags: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False, default=list)
-    confidence: Mapped[ConfidenceLevel] = mapped_column(
-        String(10), nullable=False, default=ConfidenceLevel.MEDIUM
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-        onupdate=func.now(),
-    )
-
-    # Relationships
-    target: Mapped["Target"] = relationship("Target", back_populates="notes")
-
-    __table_args__ = (
-        Index("ix_target_note_target_type", "target_id", "note_type"),
-        Index("ix_target_note_tags", "tags", postgresql_using="gin"),
-    )
-
-
-class TargetAttempt(Base):
-    """Attack attempts against targets."""
-
-    __tablename__ = "target_attempts"
-
-    id: Mapped[UUID] = mapped_column(
-        PostgresUUID(as_uuid=True), primary_key=True, default=uuid4
-    )
-    target_id: Mapped[UUID] = mapped_column(
-        PostgresUUID(as_uuid=True),
-        ForeignKey("targets.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    mission_id: Mapped[UUID | None] = mapped_column(
-        PostgresUUID(as_uuid=True), ForeignKey("missions.id"), nullable=True
-    )
-    attempt_type: Mapped[AttemptType] = mapped_column(String(50), nullable=False)
-    technique: Mapped[str] = mapped_column(String(255), nullable=False)
-    payload: Mapped[str | None] = mapped_column(Text, nullable=True)
-    expected_outcome: Mapped[str] = mapped_column(Text, nullable=False)
-    actual_outcome: Mapped[str | None] = mapped_column(Text, nullable=True)
-    success: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
-    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
-    completed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-
-    # Relationships
-    target: Mapped["Target"] = relationship("Target", back_populates="attempts")
-    mission: Mapped[Optional["Mission"]] = relationship(
-        "Mission", back_populates="attempts"
-    )
-
-    __table_args__ = (
-        Index("ix_target_attempt_target_success", "target_id", "success"),
-        Index("ix_target_attempt_technique", "technique"),
-        Index("ix_target_attempt_created", "created_at"),
-    )
-
-
 class Mission(Base):
     """Security testing missions (formerly AiSession)."""
 
@@ -391,9 +274,6 @@ class Mission(Base):
     # Relationships
     requests: Mapped[list["HttpRequest"]] = relationship(
         "HttpRequest", back_populates="mission"
-    )
-    attempts: Mapped[list["TargetAttempt"]] = relationship(
-        "TargetAttempt", back_populates="mission"
     )
     targets: Mapped[list["Target"]] = relationship(
         "Target", secondary="mission_targets", back_populates="missions"

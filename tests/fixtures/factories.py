@@ -5,25 +5,18 @@ from typing import Any
 from uuid import uuid4
 
 from hiro.db.models import (
-    AttemptType,
-    ConfidenceLevel,
     HttpRequest,
     Mission,
     MissionAction,
-    NoteType,
     RiskLevel,
     SessionStatus,
     Target,
-    TargetAttempt,
-    TargetNote,
     TargetStatus,
 )
 from hiro.db.schemas import (
     HttpRequestCreate,
     MissionCreate,
-    TargetAttemptCreate,
     TargetCreate,
-    TargetNoteCreate,
 )
 
 
@@ -50,54 +43,6 @@ class TargetFactory:
         """Create a Target model instance."""
         data = TargetFactory.create_data(**kwargs)
         return Target(**data.model_dump())
-
-
-class TargetNoteFactory:
-    """Factory for creating test target notes."""
-
-    @staticmethod
-    def create_data(target_id: Any | None = None, **kwargs) -> TargetNoteCreate:
-        """Create target note data for testing."""
-        defaults = {
-            "target_id": target_id or uuid4(),
-            "note_type": random.choice(list(NoteType)),
-            "title": f"Test Note {uuid4().hex[:8]}",
-            "content": f"Test note content: {uuid4().hex[:16]}",
-            "confidence": random.choice(list(ConfidenceLevel)),
-            "tags": ["test", "factory"],
-        }
-        defaults.update(kwargs)
-        return TargetNoteCreate(**defaults)
-
-    @staticmethod
-    def create_model(target_id: Any | None = None, **kwargs) -> TargetNote:
-        """Create a TargetNote model instance."""
-        data = TargetNoteFactory.create_data(target_id, **kwargs)
-        return TargetNote(**data.model_dump())
-
-
-class TargetAttemptFactory:
-    """Factory for creating test target attempts."""
-
-    @staticmethod
-    def create_data(target_id: Any | None = None, **kwargs) -> TargetAttemptCreate:
-        """Create target attempt data for testing."""
-        defaults = {
-            "target_id": target_id or uuid4(),
-            "attempt_type": random.choice(list(AttemptType)),
-            "technique": f"test_technique_{uuid4().hex[:8]}",
-            "payload": "test_payload",  # Should be string, not dict
-            "expected_outcome": "Expected test outcome",
-            "notes": "Test attempt notes",
-        }
-        defaults.update(kwargs)
-        return TargetAttemptCreate(**defaults)
-
-    @staticmethod
-    def create_model(target_id: Any | None = None, **kwargs) -> TargetAttempt:
-        """Create a TargetAttempt model instance."""
-        data = TargetAttemptFactory.create_data(target_id, **kwargs)
-        return TargetAttempt(**data.model_dump())
 
 
 class MissionFactory:
@@ -177,25 +122,34 @@ class TestDataBuilder:
     """Builder for creating complex test scenarios."""
 
     @staticmethod
-    async def create_target_with_notes_and_attempts(session, **target_kwargs):
-        """Create a target with associated notes and attempts."""
+    async def create_target_with_actions(session, **target_kwargs):
+        """Create a target with associated mission actions."""
         # Create target
         target_data = TargetFactory.create_data(**target_kwargs)
         target = Target(**target_data.model_dump())
         session.add(target)
         await session.flush()
 
-        # Add notes
-        for _i in range(random.randint(1, 5)):
-            note_data = TargetNoteFactory.create_data(target_id=target.id)
-            note = TargetNote(**note_data.model_dump())
-            session.add(note)
+        # Create mission for the target
+        mission = Mission(
+            id=uuid4(),
+            name=f"Test Mission for {target.host}",
+            status=SessionStatus.ACTIVE,
+        )
+        session.add(mission)
 
-        # Add attempts
-        for _i in range(random.randint(1, 3)):
-            attempt_data = TargetAttemptFactory.create_data(target_id=target.id)
-            attempt = TargetAttempt(**attempt_data.model_dump())
-            session.add(attempt)
+        # Add mission actions
+        for i in range(random.randint(1, 3)):
+            action = MissionAction(
+                id=uuid4(),
+                mission_id=mission.id,
+                action_type="test",
+                technique=f"test_technique_{i}",
+                payload="test_payload",
+                result="test_result",
+                success=random.choice([True, False]),
+            )
+            session.add(action)
 
         await session.flush()
         return target
@@ -232,7 +186,7 @@ class TestDataBuilder:
         # Create targets
         targets = []
         for i in range(3):
-            target = await TestDataBuilder.create_target_with_notes_and_attempts(
+            target = await TestDataBuilder.create_target_with_actions(
                 session,
                 title=f"Target {i + 1}",
                 status=TargetStatus.ACTIVE,

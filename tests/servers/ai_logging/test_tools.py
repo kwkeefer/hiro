@@ -37,7 +37,6 @@ class TestCreateTargetTool:
             title=title,
             status="active",
             risk_level="medium",
-            notes="Test target for unit testing",
         )
 
         # Assert
@@ -147,14 +146,12 @@ class TestUpdateTargetStatusTool:
         # Arrange
         new_status = "completed"
         new_risk = "high"
-        new_notes = "Completed security assessment"
 
         # Act
         result = await update_target_tool.execute(
             target_id=str(sample_target.id),
             status=new_status,
             risk_level=new_risk,
-            notes=new_notes,
         )
 
         # Assert
@@ -232,19 +229,18 @@ class TestGetTargetSummaryTool:
     async def test_get_target_summary_with_history(
         self, get_summary_tool: GetTargetSummaryTool, target_with_history
     ):
-        """Test getting summary for a target with notes and attempts."""
+        """Test getting summary for a target with mission actions."""
         # Arrange
         target = target_with_history["target"]
-        notes = target_with_history["notes"]
-        attempts = target_with_history["attempts"]
+        actions = target_with_history["actions"]
 
         # Act
         result = await get_summary_tool.execute(target_id=str(target.id))
 
         # Assert
         assert result["target_id"] == str(target.id)
-        assert result["statistics"]["notes_count"] == len(notes)
-        assert result["statistics"]["attempts_count"] == len(attempts)
+        assert result["statistics"]["notes_count"] == 0
+        assert result["statistics"]["attempts_count"] == len(actions)
         # Success rate would be 50% (1 success, 1 failure)
         assert result["statistics"]["success_rate"] == "50.0%"
 

@@ -6,9 +6,10 @@ from typing import Annotated, Any, ClassVar, Literal
 from urllib.parse import ParseResult, urlparse
 
 import httpx
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from hiro.core.mcp.exceptions import ToolError
+from hiro.core.mcp.validation import coerce_bool, format_validation_errors
 from hiro.db.repositories import HttpRequestRepository, TargetRepository
 from hiro.db.schemas import HttpRequestCreate
 
@@ -74,6 +75,12 @@ class HttpRequestParams(BaseModel):
             # Ensure all keys and values are strings
             return {str(k): str(val) for k, val in v.items()}
         return v  # type: ignore[no-any-return]
+
+    @field_validator("follow_redirects", mode="before")
+    @classmethod
+    def coerce_bool_field(cls, v: Any) -> bool | Any:
+        """Coerce common string representations to boolean (per ADR-018)."""
+        return coerce_bool(v)
 
     @property
     def method_upper(self) -> str:
@@ -246,6 +253,11 @@ class HttpRequestTool:
                 follow_redirects=follow_redirects,
                 auth=auth,  # type: ignore[arg-type]  # Validator converts JSON string to dict
             )
+        except ValidationError as e:
+            # Per ADR-018: Report ALL validation errors at once
+            raise ToolError(
+                "http_request", format_validation_errors(e, "HTTP request")
+            ) from e
         except Exception as e:
             raise ToolError("http_request", f"Invalid parameters: {str(e)}") from e
 

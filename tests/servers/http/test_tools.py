@@ -514,7 +514,10 @@ class TestHttpRequestTool:
                 url="https://api.example.com", headers='{"invalid": json syntax}'
             )
 
-        assert "Invalid parameters" in str(exc_info.value)
+        # Per ADR-018: Should show comprehensive validation error
+        assert "Invalid HTTP request" in str(exc_info.value)
+        assert "headers" in str(exc_info.value)
+        assert "Invalid JSON" in str(exc_info.value)
 
     @pytest.mark.unit
     async def test_execute_binary_response(self, http_config):

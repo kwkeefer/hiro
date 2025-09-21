@@ -1,4 +1,4 @@
-"""Simplified mission management provider following ADR-017 principles."""
+"""Mission management tool provider."""
 
 import logging
 from typing import Any
@@ -20,8 +20,8 @@ from .search_tools import MissionSearchTool
 logger = logging.getLogger(__name__)
 
 
-class SimplifiedMissionProvider(ToolProvider):
-    """Simplified mission management provider with clear tool separation.
+class MissionToolProvider(ToolProvider):
+    """Mission management tool provider with clear tool separation.
 
     Following ADR-017:
     - Core tools: Mission operations during testing
@@ -36,7 +36,7 @@ class SimplifiedMissionProvider(ToolProvider):
         request_repo: HttpRequestRepository,
         vector_search: VectorSearch | None = None,
     ) -> None:
-        """Initialize the simplified provider."""
+        """Initialize the mission tool provider."""
         self._mission_repo = mission_repo
         self._action_repo = action_repo
         self._request_repo = request_repo
@@ -74,7 +74,7 @@ class SimplifiedMissionProvider(ToolProvider):
         self._current_cookie_profile = None
 
     def register_tools(self, server: Any) -> None:
-        """Register all simplified mission tools with the MCP server."""
+        """Register all mission tools with the MCP server."""
 
         # ===== CORE OPERATIONS (During Testing) =====
         server.tool(

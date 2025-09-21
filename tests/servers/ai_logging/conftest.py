@@ -3,12 +3,9 @@
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from hiro.db.models import AttemptType
 from hiro.db.repositories import (
     HttpRequestRepository,
     MissionRepository,
-    TargetAttemptRepository,
-    TargetNoteRepository,
     TargetRepository,
 )
 from hiro.servers.ai_logging.tools import (
@@ -19,9 +16,7 @@ from hiro.servers.ai_logging.tools import (
 )
 from tests.fixtures.database import db_manager, test_db  # Re-export for convenience
 from tests.fixtures.factories import (
-    TargetAttemptFactory,
     TargetFactory,
-    TargetNoteFactory,
     TestDataBuilder,
 )
 
@@ -30,8 +25,6 @@ __all__ = [
     "db_manager",
     "test_db",
     "target_repo",
-    "note_repo",
-    "attempt_repo",
     "mission_repo",
     "request_repo",
     "create_target_tool",
@@ -45,18 +38,6 @@ __all__ = [
 async def target_repo(test_db: AsyncSession) -> TargetRepository:
     """Provide TargetRepository with test database."""
     return TargetRepository(test_db)
-
-
-@pytest_asyncio.fixture
-async def note_repo(test_db: AsyncSession) -> TargetNoteRepository:
-    """Provide TargetNoteRepository with test database."""
-    return TargetNoteRepository(test_db)
-
-
-@pytest_asyncio.fixture
-async def attempt_repo(test_db: AsyncSession) -> TargetAttemptRepository:
-    """Provide TargetAttemptRepository with test database."""
-    return TargetAttemptRepository(test_db)
 
 
 @pytest_asyncio.fixture
@@ -164,12 +145,15 @@ async def multiple_targets(test_db: AsyncSession, target_repo: TargetRepository)
 
 @pytest_asyncio.fixture
 async def target_with_history(
-    test_db: AsyncSession,  # noqa: ARG001
+    test_db: AsyncSession,
     target_repo: TargetRepository,
-    note_repo: TargetNoteRepository,
-    attempt_repo: TargetAttemptRepository,
+    mission_repo: MissionRepository,
 ):
-    """Create a target with notes and attempts."""
+    """Create a target with mission actions."""
+    from uuid import uuid4
+
+    from hiro.db.models import MissionAction
+
     # Create target
     target_data = TargetFactory.create_data(
         host="history.example.com",
@@ -177,46 +161,43 @@ async def target_with_history(
     )
     target = await target_repo.create(target_data)
 
-    # Add notes
-    notes = []
-    for i in range(3):
-        note_data = TargetNoteFactory.create_data(
-            target_id=target.id,
-            note_type="reconnaissance",
-            title=f"Discovery Note {i + 1}",
-            content=f"Note {i + 1}: Discovery information",
-        )
-        note = await note_repo.create(note_data)
-        notes.append(note)
+    # Create mission
+    from hiro.db.models import MissionTarget, SessionStatus
+    from hiro.db.schemas import MissionCreate
 
-    # Add attempts
-    attempts = []
+    mission_data = MissionCreate(
+        name="Test Mission",
+        status=SessionStatus.ACTIVE,
+        target_id=target.id,
+    )
+    mission = await mission_repo.create(mission_data)
+
+    # Ensure mission is linked to target through MissionTarget
+    mission_target = MissionTarget(mission_id=mission.id, target_id=target.id)
+    test_db.add(mission_target)
+    await test_db.flush()
+
+    # Add mission actions
+    actions = []
     for i in range(2):
-        attempt_data = TargetAttemptFactory.create_data(
-            target_id=target.id, attempt_type=AttemptType.SCAN
+        action = MissionAction(
+            id=uuid4(),
+            mission_id=mission.id,
+            action_type="scan",
+            technique=f"test_scan_{i}",
+            payload="test_payload",
+            result="Successful scan" if i == 0 else "Failed scan",
+            success=i == 0,
         )
-        attempt = await attempt_repo.create(attempt_data)
+        test_db.add(action)
+        actions.append(action)
 
-        # Update first attempt to be successful, second to be failed
-        from hiro.db.schemas import TargetAttemptUpdate
-
-        if i == 0:
-            update_data = TargetAttemptUpdate(
-                success=True, actual_outcome="Successful scan"
-            )
-            await attempt_repo.update(attempt.id, update_data)
-        else:
-            update_data = TargetAttemptUpdate(
-                success=False, actual_outcome="Failed scan"
-            )
-            await attempt_repo.update(attempt.id, update_data)
-
-        attempts.append(attempt)
+    await test_db.flush()
 
     return {
         "target": target,
-        "notes": notes,
-        "attempts": attempts,
+        "mission": mission,
+        "actions": actions,
     }
 
 

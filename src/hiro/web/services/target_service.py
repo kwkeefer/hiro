@@ -33,8 +33,8 @@ class TargetService:
     ) -> list[Target]:
         """List targets with optional filters."""
         query = select(Target).options(
-            selectinload(Target.notes),
             selectinload(Target.requests),
+            selectinload(Target.current_context),
         )
 
         # Apply filters
@@ -64,7 +64,6 @@ class TargetService:
             select(Target)
             .where(Target.id == target_id)
             .options(
-                selectinload(Target.notes),
                 selectinload(Target.current_context),
             )
         )

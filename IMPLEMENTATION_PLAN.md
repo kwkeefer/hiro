@@ -59,7 +59,7 @@ src/hiro/servers/missions/
 ├── core_tools.py            # Core operations (4 tools)
 ├── search_tools.py          # Search & discovery (3 tools)
 ├── library_tools.py         # Knowledge library (3 tools)
-└── simplified_provider.py   # Single provider (~10 tools total)
+└── provider.py              # Single provider (~10 tools total)
 ```
 
 ### Tool Categories (per ADR-017)

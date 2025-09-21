@@ -18,14 +18,11 @@ from .models import (
     RequestTag,
     RiskLevel,
     Target,
-    TargetAttempt,
     TargetContext,
-    TargetNote,
     TargetRequest,
     TargetStatus,
 )
 from .schemas import (
-    AttemptSearchParams,
     HttpRequestCreate,
     HttpRequestUpdate,
     MissionActionCreate,
@@ -34,11 +31,7 @@ from .schemas import (
     MissionUpdate,
     RequestSearchParams,
     RequestTagCreate,
-    TargetAttemptCreate,
-    TargetAttemptUpdate,
     TargetCreate,
-    TargetNoteCreate,
-    TargetNoteUpdate,
     TargetSearchParams,
     TargetSummary,
     TargetUpdate,
@@ -255,15 +248,16 @@ class TargetRepository:
             async with self._session_factory() as session:
                 # Count related records
                 notes_count = await session.scalar(
-                    select(func.count(TargetNote.id)).where(
-                        TargetNote.target_id == target_id
-                    )
+                    select(0).where(Target.id == target_id)
                 )
 
+                # Count MissionActions related to this target via missions
                 attempts_count = await session.scalar(
-                    select(func.count(TargetAttempt.id)).where(
-                        TargetAttempt.target_id == target_id
-                    )
+                    select(func.count(MissionAction.id))
+                    .select_from(MissionAction)
+                    .join(Mission, MissionAction.mission_id == Mission.id)
+                    .join(MissionTarget, Mission.id == MissionTarget.mission_id)
+                    .where(MissionTarget.target_id == target_id)
                 )
 
                 requests_count = await session.scalar(
@@ -272,27 +266,32 @@ class TargetRepository:
                     )
                 )
 
-                # Calculate success rate
+                # Calculate success rate from MissionActions
                 successful_attempts = await session.scalar(
-                    select(func.count(TargetAttempt.id)).where(
+                    select(func.count(MissionAction.id))
+                    .select_from(MissionAction)
+                    .join(Mission, MissionAction.mission_id == Mission.id)
+                    .join(MissionTarget, Mission.id == MissionTarget.mission_id)
+                    .where(
                         and_(
-                            TargetAttempt.target_id == target_id,
-                            TargetAttempt.success.is_(True),
+                            MissionTarget.target_id == target_id,
+                            MissionAction.success.is_(True),
                         )
                     )
                 )
         else:
             # Count related records
             notes_count = await self.session.scalar(
-                select(func.count(TargetNote.id)).where(
-                    TargetNote.target_id == target_id
-                )
+                select(0).where(Target.id == target_id)
             )
 
+            # Count MissionActions related to this target via missions
             attempts_count = await self.session.scalar(
-                select(func.count(TargetAttempt.id)).where(
-                    TargetAttempt.target_id == target_id
-                )
+                select(func.count(MissionAction.id))
+                .select_from(MissionAction)
+                .join(Mission, MissionAction.mission_id == Mission.id)
+                .join(MissionTarget, Mission.id == MissionTarget.mission_id)
+                .where(MissionTarget.target_id == target_id)
             )
 
             requests_count = await self.session.scalar(
@@ -301,12 +300,16 @@ class TargetRepository:
                 )
             )
 
-            # Calculate success rate
+            # Calculate success rate from MissionActions
             successful_attempts = await self.session.scalar(
-                select(func.count(TargetAttempt.id)).where(
+                select(func.count(MissionAction.id))
+                .select_from(MissionAction)
+                .join(Mission, MissionAction.mission_id == Mission.id)
+                .join(MissionTarget, Mission.id == MissionTarget.mission_id)
+                .where(
                     and_(
-                        TargetAttempt.target_id == target_id,
-                        TargetAttempt.success.is_(True),
+                        MissionTarget.target_id == target_id,
+                        MissionAction.success.is_(True),
                     )
                 )
             )
@@ -340,157 +343,6 @@ class TargetRepository:
             )
             await self.session.commit()
             return bool(result.rowcount > 0)
-
-
-class TargetNoteRepository:
-    """Repository for target note operations."""
-
-    def __init__(self, session: AsyncSession):
-        self.session = session
-
-    async def create(self, note_data: TargetNoteCreate) -> TargetNote:
-        """Create a new target note."""
-        note = TargetNote(**note_data.model_dump())
-        self.session.add(note)
-        await self.session.flush()
-        await self.session.refresh(note)
-        return note
-
-    async def get_by_id(self, note_id: UUID) -> TargetNote | None:
-        """Get note by ID."""
-        result = await self.session.execute(
-            select(TargetNote).where(TargetNote.id == note_id)
-        )
-        return result.scalar_one_or_none()  # type: ignore[no-any-return]
-
-    async def get_by_target(
-        self, target_id: UUID, note_type: str | None = None
-    ) -> list[TargetNote]:
-        """Get notes for a target."""
-        query = select(TargetNote).where(TargetNote.target_id == target_id)
-
-        if note_type:
-            query = query.where(TargetNote.note_type == note_type)
-
-        query = query.order_by(TargetNote.created_at.desc())
-
-        result = await self.session.execute(query)
-        return list(result.scalars().all())
-
-    async def update(
-        self, note_id: UUID, note_data: TargetNoteUpdate
-    ) -> TargetNote | None:
-        """Update note."""
-        update_data = note_data.model_dump(exclude_unset=True)
-        if not update_data:
-            return await self.get_by_id(note_id)
-
-        update_data["updated_at"] = datetime.now(UTC)
-
-        await self.session.execute(
-            update(TargetNote).where(TargetNote.id == note_id).values(**update_data)
-        )
-
-        return await self.get_by_id(note_id)
-
-    async def search(
-        self, query_text: str, tags: list[str] | None = None
-    ) -> list[TargetNote]:
-        """Search notes by text and tags."""
-        query = select(TargetNote)
-
-        if query_text:
-            search_term = f"%{query_text}%"
-            query = query.where(
-                or_(
-                    TargetNote.title.ilike(search_term),
-                    TargetNote.content.ilike(search_term),
-                )
-            )
-
-        if tags:
-            query = query.where(TargetNote.tags.overlap(tags))
-
-        query = query.order_by(TargetNote.created_at.desc())
-
-        result = await self.session.execute(query)
-        return list(result.scalars().all())
-
-    async def delete(self, note_id: UUID) -> bool:
-        """Delete note."""
-        result = await self.session.execute(
-            delete(TargetNote).where(TargetNote.id == note_id)
-        )
-        return bool(result.rowcount > 0)
-
-
-class TargetAttemptRepository:
-    """Repository for target attempt operations."""
-
-    def __init__(self, session: AsyncSession):
-        self.session = session
-
-    async def create(self, attempt_data: TargetAttemptCreate) -> TargetAttempt:
-        """Create a new target attempt."""
-        attempt = TargetAttempt(**attempt_data.model_dump())
-        self.session.add(attempt)
-        await self.session.flush()
-        await self.session.refresh(attempt)
-        return attempt
-
-    async def get_by_id(self, attempt_id: UUID) -> TargetAttempt | None:
-        """Get attempt by ID."""
-        result = await self.session.execute(
-            select(TargetAttempt).where(TargetAttempt.id == attempt_id)
-        )
-        return result.scalar_one_or_none()  # type: ignore[no-any-return]
-
-    async def update(
-        self, attempt_id: UUID, attempt_data: TargetAttemptUpdate
-    ) -> TargetAttempt | None:
-        """Update attempt."""
-        update_data = attempt_data.model_dump(exclude_unset=True)
-        if not update_data:
-            return await self.get_by_id(attempt_id)
-
-        await self.session.execute(
-            update(TargetAttempt)
-            .where(TargetAttempt.id == attempt_id)
-            .values(**update_data)
-        )
-
-        return await self.get_by_id(attempt_id)
-
-    async def search(self, params: AttemptSearchParams) -> list[TargetAttempt]:
-        """Search attempts with filters."""
-        query = select(TargetAttempt)
-
-        if params.target_id:
-            query = query.where(TargetAttempt.target_id == params.target_id)
-
-        if params.mission_id:
-            query = query.where(TargetAttempt.mission_id == params.mission_id)
-
-        if params.attempt_type:
-            query = query.where(TargetAttempt.attempt_type.in_(params.attempt_type))
-
-        if params.technique:
-            query = query.where(TargetAttempt.technique.ilike(f"%{params.technique}%"))
-
-        if params.success is not None:
-            query = query.where(TargetAttempt.success == params.success)
-
-        if params.date_from:
-            query = query.where(TargetAttempt.created_at >= params.date_from)
-
-        if params.date_to:
-            query = query.where(TargetAttempt.created_at <= params.date_to)
-
-        query = query.order_by(TargetAttempt.created_at.desc())
-        query = query.offset(params.offset).limit(params.limit)
-
-        result = await self.session.execute(query)
-        return list(result.scalars().all())
 
 
 class HttpRequestRepository:
@@ -767,16 +619,16 @@ class MissionRepository:
         )
 
         attempts_count = await self.session.scalar(
-            select(func.count(TargetAttempt.id)).where(
-                TargetAttempt.mission_id == mission_id
+            select(func.count(MissionAction.id)).where(
+                MissionAction.mission_id == mission_id
             )
         )
 
         successful_attempts = await self.session.scalar(
-            select(func.count(TargetAttempt.id)).where(
+            select(func.count(MissionAction.id)).where(
                 and_(
-                    TargetAttempt.mission_id == mission_id,
-                    TargetAttempt.success.is_(True),
+                    MissionAction.mission_id == mission_id,
+                    MissionAction.success.is_(True),
                 )
             )
         )

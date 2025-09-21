@@ -43,8 +43,8 @@
             <span class="text-gray-900 dark:text-white">{{ target.requests|length if target.requests else 0 }}</span>
         </div>
         <div>
-            <span class="block font-medium text-xs">Notes</span>
-            <span class="text-gray-900 dark:text-white">{{ target.notes|length if target.notes else 0 }}</span>
+            <span class="block font-medium text-xs">Context</span>
+            <span class="text-gray-900 dark:text-white">{{ 'v' + target.current_context.version|string if target.current_context else '-' }}</span>
         </div>
         <div>
             <span class="block font-medium text-xs">Activity</span>

@@ -30,8 +30,6 @@ class CreateTargetParams(BaseModel):
     RISK_LEVEL_DESC: ClassVar[str] = (
         "Risk assessment level (low, medium, high, critical)"
     )
-    NOTES_DESC: ClassVar[str] = "Additional notes or metadata about the target"
-
     host: str = Field(description=HOST_DESC)
     port: int | None = Field(None, description=PORT_DESC, ge=1, le=65535)
     protocol: Literal["http", "https", "tcp", "udp"] = Field(
@@ -44,7 +42,6 @@ class CreateTargetParams(BaseModel):
     risk_level: Literal["low", "medium", "high", "critical"] = Field(
         "medium", description=RISK_LEVEL_DESC
     )
-    notes: str | None = Field(None, description=NOTES_DESC)
 
 
 class CreateTargetTool:
@@ -79,9 +76,6 @@ class CreateTargetTool:
             Literal["low", "medium", "high", "critical"],
             Field(description=CreateTargetParams.RISK_LEVEL_DESC),
         ] = "medium",
-        notes: Annotated[
-            str | None, Field(description=CreateTargetParams.NOTES_DESC)
-        ] = None,
     ) -> dict[str, Any]:
         """Register a new target for testing.
 
@@ -92,7 +86,6 @@ class CreateTargetTool:
             title: Descriptive title or service name
             status: Target status (active, inactive, blocked, completed)
             risk_level: Risk assessment level (low, medium, high, critical)
-            notes: Additional notes or metadata about the target
 
         Returns:
             Target information including ID, status, and creation details
@@ -109,7 +102,6 @@ class CreateTargetTool:
                 title=title,
                 status=status,
                 risk_level=risk_level,
-                notes=notes,
             )
         except Exception as e:
             raise ToolError("create_target", f"Invalid parameters: {str(e)}") from e
@@ -138,9 +130,7 @@ class CreateTargetTool:
                 }
 
             # Prepare extra data
-            extra_data = {}
-            if params.notes:
-                extra_data["initial_notes"] = params.notes
+            extra_data: dict[str, Any] = {}
 
             # Create new target
             target_data = TargetCreate(
@@ -183,7 +173,6 @@ class UpdateTargetStatusParams(BaseModel):
     STATUS_DESC: ClassVar[str] = "New target status (optional)"
     RISK_LEVEL_DESC: ClassVar[str] = "New risk assessment level (optional)"
     TITLE_DESC: ClassVar[str] = "New descriptive title (optional)"
-    NOTES_DESC: ClassVar[str] = "Additional notes to append to metadata (optional)"
 
     target_id: str = Field(description=TARGET_ID_DESC)
     status: Literal["active", "inactive", "blocked", "completed"] | None = Field(
@@ -193,7 +182,6 @@ class UpdateTargetStatusParams(BaseModel):
         None, description=RISK_LEVEL_DESC
     )
     title: str | None = Field(None, description=TITLE_DESC)
-    notes: str | None = Field(None, description=NOTES_DESC)
 
 
 class UpdateTargetStatusTool:
@@ -223,9 +211,6 @@ class UpdateTargetStatusTool:
         title: Annotated[
             str | None, Field(description=UpdateTargetStatusParams.TITLE_DESC)
         ] = None,
-        notes: Annotated[
-            str | None, Field(description=UpdateTargetStatusParams.NOTES_DESC)
-        ] = None,
     ) -> dict[str, Any]:
         """Update target status and metadata.
 
@@ -234,7 +219,6 @@ class UpdateTargetStatusTool:
             status: New target status (optional)
             risk_level: New risk assessment level (optional)
             title: New descriptive title (optional)
-            notes: Additional notes to append to metadata (optional)
 
         Returns:
             Updated target information
@@ -249,7 +233,6 @@ class UpdateTargetStatusTool:
                 status=status,
                 risk_level=risk_level,
                 title=title,
-                notes=notes,
             )
         except Exception as e:
             raise ToolError(
@@ -286,19 +269,6 @@ class UpdateTargetStatusTool:
                 update_data.risk_level = RiskLevel(params.risk_level)
             if params.title:
                 update_data.title = params.title
-
-            # Handle notes - append to extra_data
-            if params.notes:
-                extra_data = target.extra_data.copy()
-                if "notes" not in extra_data:
-                    extra_data["notes"] = []
-                extra_data["notes"].append(
-                    {
-                        "timestamp": datetime.now(UTC).isoformat(),
-                        "content": params.notes,
-                    }
-                )
-                update_data.extra_data = extra_data
 
             # Update target
             updated_target = await self._target_repo.update(target_uuid, update_data)

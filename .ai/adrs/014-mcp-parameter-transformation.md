@@ -9,6 +9,7 @@ When integrating with FastMCP for the Model Context Protocol (MCP), we encounter
 1. **Claude Compatibility**: Claude (and other MCP clients) struggled with complex nested dictionary parameters, often showing them as "unknown" types in the UI
 2. **FastMCP Schema Generation**: FastMCP's automatic schema generation created unexpected nesting when Pydantic models were used directly as parameters
 3. **Type Safety vs Usability**: Need to balance strict type checking with practical usability for AI assistants
+4. **Pragmatic Implementation**: Not all complex types need JSON encoding - frequency of use and complexity should guide the decision
 
 ## Decision
 We implement a dual-layer parameter transformation pattern for MCP tools:
@@ -70,15 +71,44 @@ async def execute(
 ## Parameter Type Guidelines
 
 ### Use JSON Strings For:
-- **Dictionaries**: Headers, cookies, auth credentials, arbitrary key-value pairs
-- **Lists/Arrays**: Multiple filter values, tags, identifiers
-- **Complex nested structures**: Any structure beyond simple scalars
+- **Frequently-used complex fields**: Headers, cookies, params (used in most HTTP requests)
+- **Multiple-value filters**: Status arrays, risk levels for searching/filtering
+- **Complex nested structures**: Any structure with multiple levels of nesting
+- **Variable schema fields**: Fields where the structure varies significantly between uses
 
 ### Use Direct Types For:
-- **Simple strings**: URLs, IDs, single values
+- **Simple strings**: URLs, IDs, single values, descriptions
 - **Integers**: Ports, limits, offsets
-- **Booleans**: Flags like `follow_redirects`
+- **Booleans**: Flags like `follow_redirects`, `success`
 - **Single enums**: Status values, risk levels (when only one value is needed)
+- **Rarely-used metadata**: Fields that are optional and typically contain simple values
+
+### Pragmatic Exceptions:
+- **Simple metadata fields**: Can remain as direct dict/list if typically used with simple structures
+- **Optional fields with defaults**: If rarely provided by users, direct types reduce complexity
+- **Fields with consistent simple patterns**: Tags as simple string arrays, basic key-value metadata
+
+### When Using Direct Types for Complex Fields:
+**CRITICAL**: Since Claude cannot see the schema of direct dict/list types, you MUST provide clear examples in the field description:
+
+```python
+# BAD: No example for direct type
+metadata: dict[str, Any] | None = Field(None, description="Additional metadata")
+
+# GOOD: Clear example shows expected structure
+metadata: dict[str, Any] | None = Field(
+    None,
+    description='Additional metadata, e.g. {"priority": "high", "reviewer": "alice"}'
+)
+
+# GOOD: Array example
+tags: list[str] | None = Field(
+    None,
+    description='Tags for categorization, e.g. ["security", "critical", "auth-bypass"]'
+)
+```
+
+**Note**: If your Pydantic model accepts both JSON strings AND direct types (via validators), ensure your description clearly indicates this accepts "JSON" to avoid confusion.
 
 ## Benefits
 
@@ -96,22 +126,31 @@ async def execute(
 
 ## Examples
 
-### Good: Dictionary as JSON String
+### Good: Dictionary as JSON String (Frequently Used)
 ```python
-# AI provides:
+# HTTP headers - used in almost every request
 headers='{"User-Agent": "Bot", "Accept": "application/json"}'
 
 # Tool parses to:
 headers={"User-Agent": "Bot", "Accept": "application/json"}
 ```
 
-### Good: Array as JSON String
+### Good: Array as JSON String (Filtering)
 ```python
-# AI provides:
+# Search filters - multiple values common
 status='["active", "inactive"]'
 
 # Tool parses to:
 status=["active", "inactive"]
+```
+
+### Good: Direct Types for Simple/Rare Fields
+```python
+# Mission metadata - rarely used, simple when used
+metadata: dict[str, Any] | None = None  # Direct type is fine
+
+# Simple tags array - consistent pattern
+tags: list[str] | None = None  # Direct type is fine
 ```
 
 ### Bad: Unnecessary JSON for Simple Values
@@ -122,6 +161,22 @@ host='{"value": "example.com"}'  # Overcomplicated
 # Do this instead:
 host='example.com'  # Simple string
 ```
+
+## Real-World Implementation Examples
+
+### HttpToolProvider (High JSON usage)
+- ✅ `headers`, `params`, `cookies`, `auth` → JSON strings (used frequently)
+- ✅ `url`, `method`, `follow_redirects` → Direct types (simple values)
+
+### MissionToolProvider (Selective JSON usage)
+- ✅ `scope` → JSON string (complex when used)
+- ✅ `metadata`, `tags` → Direct types (rarely used, simple structure)
+- ✅ `mission_id`, `name`, `goal` → Direct types (simple strings)
+
+### AiLoggingToolProvider (Mixed approach)
+- ✅ Status/risk arrays for filtering → JSON strings
+- ✅ `host`, `port`, `protocol` → Direct types (simple values)
+- ✅ `notes` → Direct type (simple text field)
 
 ## References
 - FastMCP documentation on parameter schemas

@@ -7,9 +7,6 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from .models import (
-    AttemptType,
-    ConfidenceLevel,
-    NoteType,
     RiskLevel,
     SessionStatus,
     TargetStatus,
@@ -61,82 +58,6 @@ class Target(TargetBase):
     last_activity: datetime
     created_at: datetime
     updated_at: datetime
-
-
-# Target Note schemas
-class TargetNoteBase(BaseSchema):
-    """Base target note schema."""
-
-    note_type: NoteType = Field(..., description="Type of note")
-    title: str = Field(..., description="Note title")
-    content: str = Field(..., description="Note content")
-    tags: list[str] = Field(default_factory=list, description="Note tags")
-    confidence: ConfidenceLevel = Field(
-        ConfidenceLevel.MEDIUM, description="Confidence level"
-    )
-
-
-class TargetNoteCreate(TargetNoteBase):
-    """Schema for creating target notes."""
-
-    target_id: UUID = Field(..., description="Target ID")
-
-
-class TargetNoteUpdate(BaseSchema):
-    """Schema for updating target notes."""
-
-    title: str | None = None
-    content: str | None = None
-    tags: list[str] | None = None
-    confidence: ConfidenceLevel | None = None
-
-
-class TargetNote(TargetNoteBase):
-    """Complete target note schema."""
-
-    id: UUID
-    target_id: UUID
-    created_at: datetime
-    updated_at: datetime
-
-
-# Target Attempt schemas
-class TargetAttemptBase(BaseSchema):
-    """Base target attempt schema."""
-
-    attempt_type: AttemptType = Field(..., description="Type of attempt")
-    technique: str = Field(..., description="Technique used")
-    payload: str | None = Field(None, description="Payload used")
-    expected_outcome: str = Field(..., description="Expected result")
-    notes: str | None = Field(None, description="Additional notes")
-
-
-class TargetAttemptCreate(TargetAttemptBase):
-    """Schema for creating target attempts."""
-
-    target_id: UUID = Field(..., description="Target ID")
-    mission_id: UUID | None = Field(None, description="AI session ID")
-
-
-class TargetAttemptUpdate(BaseSchema):
-    """Schema for updating target attempts."""
-
-    actual_outcome: str | None = None
-    success: bool | None = None
-    notes: str | None = None
-    completed_at: datetime | None = None
-
-
-class TargetAttempt(TargetAttemptBase):
-    """Complete target attempt schema."""
-
-    id: UUID
-    target_id: UUID
-    mission_id: UUID | None
-    actual_outcome: str | None
-    success: bool | None
-    created_at: datetime
-    completed_at: datetime | None
 
 
 # Mission schemas (formerly AI Session)
@@ -272,22 +193,6 @@ class RequestSearchParams(BaseSchema):
     tags: list[str] | None = Field(None, description="Filter by tags")
     mission_id: UUID | None = Field(None, description="Filter by session")
     target_id: UUID | None = Field(None, description="Filter by target")
-    date_from: datetime | None = Field(None, description="Filter from date")
-    date_to: datetime | None = Field(None, description="Filter to date")
-    limit: int = Field(50, ge=1, le=1000, description="Result limit")
-    offset: int = Field(0, ge=0, description="Result offset")
-
-
-class AttemptSearchParams(BaseSchema):
-    """Parameters for attempt search."""
-
-    target_id: UUID | None = Field(None, description="Filter by target")
-    mission_id: UUID | None = Field(None, description="Filter by session")
-    attempt_type: list[AttemptType] | None = Field(
-        None, description="Filter by attempt type"
-    )
-    technique: str | None = Field(None, description="Filter by technique")
-    success: bool | None = Field(None, description="Filter by success")
     date_from: datetime | None = Field(None, description="Filter from date")
     date_to: datetime | None = Field(None, description="Filter to date")
     limit: int = Field(50, ge=1, le=1000, description="Result limit")

@@ -9,21 +9,16 @@ from .connection import (
     test_connection,
 )
 from .models import (
-    AttemptType,
     Base,
-    ConfidenceLevel,
     ContextChangeType,
     HttpRequest,
     Mission,
     MissionTarget,
-    NoteType,
     RequestTag,
     RiskLevel,
     SessionStatus,
     Target,
-    TargetAttempt,
     TargetContext,
-    TargetNote,
     TargetRequest,
     # Enums
     TargetStatus,
@@ -32,13 +27,13 @@ from .repositories import (
     HttpRequestRepository,
     MissionRepository,
     RequestTagRepository,
-    TargetAttemptRepository,
     TargetContextRepository,
-    TargetNoteRepository,
     TargetRepository,
 )
 from .schemas import (
-    AttemptSearchParams,
+    HttpRequest as HttpRequestSchema,
+)
+from .schemas import (
     # Request schemas
     HttpRequestCreate,
     HttpRequestUpdate,
@@ -49,20 +44,11 @@ from .schemas import (
     RequestSearchParams,
     # Tag schemas
     RequestTagCreate,
-    # Attempt schemas
-    TargetAttemptCreate,
-    TargetAttemptUpdate,
     # Target schemas
     TargetCreate,
-    # Note schemas
-    TargetNoteCreate,
-    TargetNoteUpdate,
     TargetSearchParams,
     TargetSummary,
     TargetUpdate,
-)
-from .schemas import (
-    HttpRequest as HttpRequestSchema,
 )
 from .schemas import (
     Mission as MissionSchema,
@@ -72,12 +58,6 @@ from .schemas import (
 )
 from .schemas import (
     Target as TargetSchema,
-)
-from .schemas import (
-    TargetAttempt as TargetAttemptSchema,
-)
-from .schemas import (
-    TargetNote as TargetNoteSchema,
 )
 
 __all__ = [
@@ -92,8 +72,6 @@ __all__ = [
     "Base",
     "Target",
     "TargetContext",
-    "TargetNote",
-    "TargetAttempt",
     "Mission",
     "HttpRequest",
     "RequestTag",
@@ -102,16 +80,11 @@ __all__ = [
     # Enums
     "TargetStatus",
     "RiskLevel",
-    "NoteType",
-    "ConfidenceLevel",
     "ContextChangeType",
-    "AttemptType",
     "SessionStatus",
     # Repositories
     "TargetRepository",
     "TargetContextRepository",
-    "TargetNoteRepository",
-    "TargetAttemptRepository",
     "MissionRepository",
     "HttpRequestRepository",
     "RequestTagRepository",
@@ -121,13 +94,6 @@ __all__ = [
     "TargetSchema",
     "TargetSearchParams",
     "TargetSummary",
-    "TargetNoteCreate",
-    "TargetNoteUpdate",
-    "TargetNoteSchema",
-    "TargetAttemptCreate",
-    "TargetAttemptUpdate",
-    "TargetAttemptSchema",
-    "AttemptSearchParams",
     "MissionCreate",
     "MissionUpdate",
     "MissionSchema",
